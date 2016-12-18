@@ -1,0 +1,11 @@
+Make AP_TECS override when taxi (control throttle)
+update_pitch_throttle is main method
+in it _update_speed_demand() is speed
+and then _update_throttle_with_airspeed or _update_throttle_without_airspeed to control throttle
+
+Make AP_L1_Control override when taxi (control yaw)
+update_waypoint is calculating demands
+
+Plane::update_navigation is actual navigating with mission.update(); in AUTO mode
+
+AP_Mission handles commands store and transmitting to/from GCS
