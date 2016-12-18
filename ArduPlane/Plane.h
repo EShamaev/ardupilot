@@ -94,6 +94,8 @@
 #include <AP_ICEngine/AP_ICEngine.h>
 #include <AP_Landing/AP_Landing.h>
 
+#include <AP_Taxi/AP_Taxi.h>
+
 #include "GCS_Mavlink.h"
 #include "quadplane.h"
 #include "tuning.h"
