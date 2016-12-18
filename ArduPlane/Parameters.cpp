@@ -1251,6 +1251,10 @@ const AP_Param::Info Plane::var_info[] = {
     // @Path: ../libraries/AP_Landing/AP_Landing.cpp
     GOBJECT(landing, "LAND_", AP_Landing),
 
+    // @Group: TAXI_
+    // @Path: ../libraries/AP_Taxi/AP_Taxi.cpp
+    GOBJECT(landing, "TAXI_", AP_Taxi),
+
     AP_VAREND
 };
 
