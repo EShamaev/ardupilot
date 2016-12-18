@@ -236,7 +236,9 @@ private:
 #endif
 
     AP_L1_Control L1_controller {ahrs};
-    AP_TECS TECS_controller {ahrs, aparm, landing};
+    AP_TECS TECS_controller {ahrs, aparm, landing, taxi};
+
+    AP_Taxi taxi {mission, ahrs, SpdHgt_Controller,nav_controller};
 
     // Attitude to servo controllers
     AP_RollController  rollController {ahrs, aparm, DataFlash};
