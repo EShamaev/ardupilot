@@ -1282,6 +1282,14 @@ const AP_Param::GroupInfo ParametersG2::var_info[] = {
     // @Path: ../libraries/AP_Stats/AP_Stats.cpp
     AP_SUBGROUPINFO(stats, "STAT", 5, ParametersG2, AP_Stats),
 
+    // @Param: AOA_CRIT
+    // @DisplayName: Critical Angel of Atack
+    // @Description: Angle of attack which produces maximum lift coefficient. This is also called the "stall angle of attack". Above this critical angle of attack, the aircraft is said to be in a stall. A fixed-wing aircraft by definition is stalled at or above the critical angle of attack rather than at or below a particular airspeed.
+    // @Units: Degrees
+    // @Values: 0-40
+    // @User: Advanced
+    AP_GROUPINFO("AOA_CRIT", 6, ParametersG2, aoa_crit, 25),
+
     AP_GROUPEND
 };
 

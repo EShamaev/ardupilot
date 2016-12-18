@@ -581,6 +581,9 @@ public:
 
     // whether to enforce acceptance of packets only from sysid_my_gcs
     AP_Int8 sysid_enforce;
+
+    // critical angle of attack
+    AP_Float aoa_crit;
 };
 
 extern const AP_Param::Info var_info[];
