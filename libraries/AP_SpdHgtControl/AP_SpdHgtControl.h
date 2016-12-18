@@ -32,7 +32,8 @@ public:
 		FLIGHT_LAND_APPROACH = 4,
 		FLIGHT_LAND_PREFLARE = 5,
         FLIGHT_LAND_FINAL    = 6,
-        FLIGHT_LAND_ABORT    = 7
+        FLIGHT_LAND_ABORT    = 7,
+        GROUND_TAXI          = 8
 	};
 
 	// Update of the pitch and throttle demands
