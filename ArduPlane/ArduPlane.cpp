@@ -907,6 +907,8 @@ void Plane::set_flight_stage(AP_SpdHgtControl::FlightStage fs)
     case AP_SpdHgtControl::FLIGHT_TAKEOFF:
         landing.in_progress = false;
         break;
+    case AP_SpdHgtControl::GROUND_TAXI:
+        break;
     }
     
 
