@@ -482,6 +482,16 @@ public:
     // Retrieves the corrected NED delta velocity in use by the inertial navigation
     virtual void getCorrectedDeltaVelocityNED(Vector3f& ret, float& dt) const { ret.zero(); _ins.get_delta_velocity(ret); dt = _ins.get_delta_velocity_dt(); }
     
+    // return calculated AOA
+    float getAOA(void)	const   {
+        return _AOA;
+    }
+
+    // return calculated SSA
+	float getSSA(void)	const   {
+        return _SSA;
+    }
+
 protected:
     AHRS_VehicleClass _vehicle_class;
 
@@ -566,6 +576,10 @@ protected:
 
     // which accelerometer instance is active
     uint8_t _active_accel_instance;
+
+    // AOA and SSA
+    float _AOA, _SSA;
+    void update_AOA_SSA(void);
 };
 
 #include "AP_AHRS_DCM.h"
