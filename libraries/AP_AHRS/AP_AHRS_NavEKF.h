@@ -244,7 +244,7 @@ public:
 
     // get the index of the current primary gyro sensor
     uint8_t get_primary_gyro_index(void) const override;
-    
+
 private:
     enum EKF_TYPE {EKF_TYPE_NONE=0,
 #if AP_AHRS_WITH_EKF1
@@ -280,6 +280,9 @@ private:
     void update_DCM(void);
     void update_EKF1(void);
     void update_EKF2(void);
+
+    // update of AOA and SSA estimations
+    void update_AOA_SSA(void);
 
     // get the index of the current primary IMU
     uint8_t get_primary_IMU_index(void) const;
