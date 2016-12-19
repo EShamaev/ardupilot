@@ -29,12 +29,20 @@ public:
     virtual void _timer_tick() {}
 
     // add some DSM input bytes, for RCInput over a serial port
-    void add_dsm_input(const uint8_t *bytes, size_t nbytes);
+    bool add_dsm_input(const uint8_t *bytes, size_t nbytes);
 
     // add some SBUS input bytes, for RCInput over a serial port
     void add_sbus_input(const uint8_t *bytes, size_t nbytes);
 
+    // add some SUMD input bytes, for RCInput over a serial port
+    bool add_sumd_input(const uint8_t *bytes, size_t nbytes);
 
+    // add some st24 input bytes, for RCInput over a serial port
+    bool add_st24_input(const uint8_t *bytes, size_t nbytes);
+
+    // add some srxl input bytes, for RCInput over a serial port
+    bool add_srxl_input(const uint8_t *bytes, size_t nbytes);
+    
 protected:
     void _process_rc_pulse(uint16_t width_s0, uint16_t width_s1);
     void _update_periods(uint16_t *periods, uint8_t len);

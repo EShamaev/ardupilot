@@ -1,4 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 /*
    Lead developer: Andrew Tridgell & Tom Pittenger
 
@@ -44,6 +43,7 @@
 #include <AP_AccelCal/AP_AccelCal.h>                // interface and maths for accelerometer calibration
 #include <AP_AHRS/AP_AHRS.h>         // ArduPilot Mega DCM Library
 #include <RC_Channel/RC_Channel.h>     // RC Channel Library
+#include <RC_Channel/SRV_Channel.h>
 #include <AP_RangeFinder/AP_RangeFinder.h>     // Range finder library
 #include <Filter/Filter.h>                     // Filter library
 #include <AP_Buffer/AP_Buffer.h>      // APM FIFO Buffer
@@ -52,6 +52,8 @@
 #include <AP_Airspeed/AP_Airspeed.h>
 #include <AP_Terrain/AP_Terrain.h>
 #include <AP_RPM/AP_RPM.h>
+#include <AP_Stats/AP_Stats.h>     // statistics library
+#include <AP_Beacon/AP_Beacon.h>
 
 #include <AP_AdvancedFailsafe/AP_AdvancedFailsafe.h>
 #include <APM_Control/APM_Control.h>
@@ -90,6 +92,7 @@
 #include <AP_ADSB/AP_ADSB.h>
 #include <AP_Button/AP_Button.h>
 #include <AP_ICEngine/AP_ICEngine.h>
+#include <AP_Landing/AP_Landing.h>
 
 #include "GCS_Mavlink.h"
 #include "quadplane.h"
@@ -120,6 +123,7 @@ public:
             AP_Param::setup_object_defaults(this, var_info);
     }
     bool pre_arm_checks(bool report);
+    bool arm(uint8_t method) override;
 
     // var_info for holding Parameter information
     static const struct AP_Param::GroupInfo var_info[];
@@ -214,23 +218,9 @@ private:
 
     AP_InertialSensor ins;
 
-#if RANGEFINDER_ENABLED == ENABLED
-    // rangefinder
     RangeFinder rangefinder {serial_manager};
 
-    struct {
-        bool in_range:1;
-        bool have_initial_reading:1;
-        bool in_use:1;
-        float initial_range;
-        float correction;
-        float initial_correction;
-        float last_stable_correction;
-        uint32_t last_correction_time_ms;
-        uint8_t in_range_count;
-        float height_estimate;
-    } rangefinder_state;
-#endif
+    AP_Vehicle::FixedWing::Rangefinder_State rangefinder_state;
 
     AP_RPM rpm_sensor;
     
@@ -244,7 +234,7 @@ private:
 #endif
 
     AP_L1_Control L1_controller {ahrs};
-    AP_TECS TECS_controller {ahrs, aparm};
+    AP_TECS TECS_controller {ahrs, aparm, landing};
 
     // Attitude to servo controllers
     AP_RollController  rollController {ahrs, aparm, DataFlash};
@@ -421,6 +411,11 @@ private:
     AP_Frsky_Telem frsky_telemetry {ahrs, battery, rangefinder};
 #endif
 
+    // Variables for extended status MAVLink messages
+    uint32_t control_sensors_present;
+    uint32_t control_sensors_enabled;
+    uint32_t control_sensors_health;
+ 
     // Airspeed Sensors
     AP_Airspeed airspeed;
 
@@ -464,16 +459,6 @@ private:
         // Flag for using gps ground course instead of INS yaw.  Set false when takeoff command in process.
         bool takeoff_complete:1;
 
-        // Flag to indicate if we have landed.
-        // Set land_complete if we are within 2 seconds distance or within 3 meters altitude of touchdown
-        bool land_complete:1;
-
-        // Flag to indicate if we have triggered pre-flare. This occurs when we have reached LAND_PF_ALT
-        bool land_pre_flare:1;
-
-        // are we in auto and flight mode is approach || pre-flare || final (flare)
-        bool land_in_progress:1;
-
         // are we headed to the land approach waypoint? Works for any nav type
         bool wp_is_land_approach:1;
 
@@ -491,9 +476,6 @@ private:
 
         // have we checked for an auto-land?
         bool checked_for_autoland:1;
-
-        // denotes if a go-around has been commanded for landing
-        bool commanded_go_around:1;
 
         // Altitude threshold to complete a takeoff command in autonomous modes.  Centimeters
         // are we in idle mode? used for balloon launch to stop servo
@@ -539,17 +521,8 @@ private:
         // last time is_flying() returned true in milliseconds
         uint32_t last_flying_ms;
 
-        // once landed, post some landing statistics to the GCS
-        bool post_landing_stats;
-
         // time stamp of when we start flying while in auto mode in milliseconds
         uint32_t started_flying_in_auto_ms;
-
-        // calculated approach slope during auto-landing: ((prev_WP_loc.alt - next_WP_loc.alt)*0.01f - aparm.land_flare_sec * sink_rate) / get_distance(prev_WP_loc, next_WP_loc)
-        float land_slope;
-
-        // same as land_slope but sampled once before a rangefinder changes the slope. This should be the original mission planned slope
-        float initial_land_slope;
 
         // barometric altitude at start of takeoff
         float baro_takeoff_alt;
@@ -559,9 +532,6 @@ private:
 
         // are we doing loiter mode as a VTOL?
         bool vtol_loiter:1;
-
-        // landing altitude offset (meters)
-        float land_alt_offset;
     } auto_state;
 
     struct {
@@ -605,7 +575,7 @@ private:
     bool auto_navigation_mode:1;
     
     // this controls throttle suppression in auto modes
-    bool throttle_suppressed:1;
+    bool throttle_suppressed;
 	
     // reduce throttle to eliminate battery over-current
     int8_t  throttle_watt_limit_max;
@@ -656,6 +626,14 @@ private:
 #if AP_TERRAIN_AVAILABLE
     AP_Terrain terrain {ahrs, mission, rally};
 #endif
+
+    AP_Landing landing {mission,ahrs,SpdHgt_Controller,nav_controller,aparm,
+        FUNCTOR_BIND_MEMBER(&Plane::set_target_altitude_proportion, void, const Location&, float),
+        FUNCTOR_BIND_MEMBER(&Plane::constrain_target_altitude_location, void, const Location&, const Location&),
+        FUNCTOR_BIND_MEMBER(&Plane::adjusted_altitude_cm, int32_t),
+        FUNCTOR_BIND_MEMBER(&Plane::adjusted_relative_altitude_cm, int32_t),
+        FUNCTOR_BIND_MEMBER(&Plane::disarm_if_autoland_complete, void),
+        FUNCTOR_BIND_MEMBER(&Plane::update_flight_stage, void)};
 
     AP_ADSB adsb {ahrs};
 
@@ -773,6 +751,11 @@ private:
         uint32_t last_log_dropped;
     } perf;
 
+    struct {
+        uint32_t last_trim_check;
+        uint32_t last_trim_save;
+    } auto_trim;
+
     // last time home was updated while disarmed
     uint32_t last_home_update_ms;
     
@@ -789,8 +772,6 @@ private:
 
     static const AP_Scheduler::Task scheduler_tasks[];
     static const AP_Param::Info var_info[];
-
-    bool demoing_servos = false;
 
     // use this to prevent recursion during sensor init
     bool in_mavlink_delay = false;
@@ -819,6 +800,7 @@ private:
     void send_heartbeat(mavlink_channel_t chan);
     void send_attitude(mavlink_channel_t chan);
     void send_fence_status(mavlink_channel_t chan);
+    void update_sensor_status_flags(void);
     void send_extended_status1(mavlink_channel_t chan);
     void send_location(mavlink_channel_t chan);
     void send_nav_controller_output(mavlink_channel_t chan);
@@ -940,11 +922,7 @@ private:
     bool geofence_stickmixing(void);
     void geofence_send_status(mavlink_channel_t chan);
     bool geofence_breached(void);
-    bool verify_land();
     void disarm_if_autoland_complete();
-    void setup_landing_glide_slope(void);
-    void adjust_landing_slope_for_rangefinder_bump(void);
-    bool jump_to_landing_sequence(void);
     float tecs_hgt_afe(void);
     void set_nav_controller(void);
     void loiter_angle_reset(void);
@@ -979,6 +957,7 @@ private:
     void read_receiver_rssi(void);
     void rpm_update(void);
     void button_update(void);
+    void stats_update();
     void ice_update(void);
     void report_radio();
     void report_ins();
@@ -1042,6 +1021,14 @@ private:
     void stabilize();
     void set_servos_idle(void);
     void set_servos();
+    void set_servos_manual_passthrough(void);
+    void set_servos_controlled(void);
+    void set_servos_old_elevons(void);
+    void set_servos_flaps(void);
+    void servo_output_mixers(void);
+    void servos_output(void);
+    void servos_auto_trim(void);
+    void throttle_watt_limiter(int8_t &min_throttle, int8_t &max_throttle);
     bool allow_reverse_thrust(void);
     void update_aux();
     void update_is_flying_5Hz(void);
@@ -1101,7 +1088,6 @@ private:
     bool verify_command_callback(const AP_Mission::Mission_Command& cmd);
     void print_flight_mode(AP_HAL::BetterStream *port, uint8_t mode);
     void run_cli(AP_HAL::UARTDriver *port);
-    bool restart_landing_sequence();
     void log_init();
     void init_capabilities(void);
     void dataflash_periodic(void);
@@ -1111,6 +1097,7 @@ private:
     void parachute_release();
     bool parachute_manual_release();
     void accel_cal_update(void);
+    void update_soft_armed();
 
     // support for AP_Avoidance custom flight mode, AVOID_ADSB
     bool avoid_adsb_init(bool ignore_checks);

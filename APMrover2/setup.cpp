@@ -1,5 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include "Rover.h"
 
 #if CLI_ENABLED == ENABLED
@@ -50,7 +48,7 @@ void Rover::zero_eeprom(void)
 {
 	cliSerial->printf("\nErasing EEPROM\n");
     StorageManager::erase();
-	cliSerial->printf("done\n");
+	cliSerial->println("done");
 }
 
 #endif // CLI_ENABLED

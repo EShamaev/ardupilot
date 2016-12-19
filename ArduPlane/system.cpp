@@ -1,5 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include "Plane.h"
 #include "version.h"
 
@@ -48,10 +46,10 @@ int8_t Plane::reboot_board(uint8_t argc, const Menu::arg *argv)
 void Plane::run_cli(AP_HAL::UARTDriver *port)
 {
     // disable the failsafe code in the CLI
-    hal.scheduler->register_timer_failsafe(NULL,1);
+    hal.scheduler->register_timer_failsafe(nullptr,1);
 
     // disable the mavlink delay callback
-    hal.scheduler->register_delay_callback(NULL, 5);
+    hal.scheduler->register_delay_callback(nullptr, 5);
 
     cliSerial = port;
     Menu::set_port(port);
@@ -90,6 +88,9 @@ void Plane::init_ardupilot()
     //
     load_parameters();
 
+    // initialise stats module
+    g2.stats.init();
+
 #if HIL_SUPPORT
     if (g.hil_mode == 1) {
         // set sensors to HIL mode
@@ -100,7 +101,6 @@ void Plane::init_ardupilot()
 #endif
 
     set_control_channels();
-    init_rc_out_main();
     
 #if HAVE_PX4_MIXER
     if (!quadplane.enable) {
@@ -131,6 +131,8 @@ void Plane::init_ardupilot()
     // setup any board specific drivers
     BoardConfig.init();
 
+    init_rc_out_main();
+    
     // allow servo set on all channels except first 4
     ServoRelayEvents.set_channel_mask(0xFFF0);
 
@@ -162,7 +164,9 @@ void Plane::init_ardupilot()
     // setup frsky
 #if FRSKY_TELEM_ENABLED == ENABLED
     // setup frsky, and pass a number of parameters to the library
-    frsky_telemetry.init(serial_manager);
+    frsky_telemetry.init(serial_manager, FIRMWARE_STRING,
+                         MAV_TYPE_FIXED_WING,
+                         &g.fs_batt_voltage, &g.fs_batt_mah);
 #endif
 
 #if LOGGING_ENABLED == ENABLED
@@ -224,10 +228,10 @@ void Plane::init_ardupilot()
     if (g.cli_enabled == 1) {
         const char *msg = "\nPress ENTER 3 times to start interactive setup\n";
         cliSerial->println(msg);
-        if (gcs[1].initialised && (gcs[1].get_uart() != NULL)) {
+        if (gcs[1].initialised && (gcs[1].get_uart() != nullptr)) {
             gcs[1].get_uart()->println(msg);
         }
-        if (num_gcs > 2 && gcs[2].initialised && (gcs[2].get_uart() != NULL)) {
+        if (num_gcs > 2 && gcs[2].initialised && (gcs[2].get_uart() != nullptr)) {
             gcs[2].get_uart()->println(msg);
         }
     }
@@ -333,11 +337,8 @@ void Plane::set_mode(enum FlightMode mode, mode_reason_t reason)
     // reset landing check
     auto_state.checked_for_autoland = false;
 
-    // reset go around command
-    auto_state.commanded_go_around = false;
-
-    // not in pre-flare
-    auto_state.land_pre_flare = false;
+    // reset landing
+    landing.reset();
     
     // zero locked course
     steer_state.locked_course_err = 0;
@@ -493,10 +494,7 @@ void Plane::set_mode(enum FlightMode mode, mode_reason_t reason)
     if (should_log(MASK_LOG_MODE))
         DataFlash.Log_Write_Mode(control_mode);
 
-    // reset attitude integrators on mode change
-    rollController.reset_I();
-    pitchController.reset_I();
-    yawController.reset_I();    
+    // reset steering integrator on mode change
     steerController.reset_I();    
 }
 
@@ -541,7 +539,7 @@ void Plane::exit_mode(enum FlightMode mode)
 
             if (mission.get_current_nav_cmd().id == MAV_CMD_NAV_LAND)
             {
-                restart_landing_sequence();
+                landing.restart_landing_sequence();
             }
         }
         auto_state.started_flying_in_auto_ms = 0;
@@ -777,8 +775,6 @@ bool Plane::should_log(uint32_t mask)
     }
     bool ret = hal.util->get_soft_armed() || DataFlash.log_while_disarmed();
     if (ret && !DataFlash.logging_started() && !in_log_download) {
-        // we have to set in_mavlink_delay to prevent logging while
-        // writing headers
         start_logging();
     }
     return ret;
@@ -811,8 +807,7 @@ int8_t Plane::throttle_percentage(void)
 void Plane::change_arm_state(void)
 {
     Log_Arm_Disarm();
-    hal.util->set_soft_armed(arming.is_armed() &&
-                             hal.util->safety_switch_state() != AP_HAL::Util::SAFETY_DISARMED);
+    update_soft_armed();
     quadplane.set_armed(hal.util->get_soft_armed());
 }
 
@@ -855,7 +850,7 @@ bool Plane::disarm_motors(void)
     change_arm_state();
 
     // reload target airspeed which could have been modified by a mission
-    plane.g.airspeed_cruise_cm.load();
+    plane.aparm.airspeed_cruise_cm.load();
     
     return true;
 }

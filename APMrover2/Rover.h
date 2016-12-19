@@ -1,4 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 /*
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -58,7 +57,6 @@
 #include <DataFlash/DataFlash.h>
 #include <AP_RCMapper/AP_RCMapper.h>        // RC input mapping library
 #include <AP_Scheduler/AP_Scheduler.h>       // main loop scheduler
-#include <stdarg.h>
 #include <AP_Navigation/AP_Navigation.h>
 #include <APM_Control/APM_Control.h>
 #include <AP_L1_Control/AP_L1_Control.h>
@@ -73,6 +71,8 @@
 #include <AP_OpticalFlow/AP_OpticalFlow.h>     // Optical Flow library
 #include <AP_RSSI/AP_RSSI.h>                   // RSSI Library
 #include <AP_Button/AP_Button.h>
+#include <AP_Stats/AP_Stats.h>     // statistics library
+#include <AP_Beacon/AP_Beacon.h>
 
 // Configuration
 #include "config.h"
@@ -110,6 +110,7 @@ private:
 
     // all settable parameters
     Parameters g;
+    ParametersG2 g2;
 
     // main loop scheduler
     AP_Scheduler scheduler;
@@ -291,6 +292,10 @@ private:
     AP_Frsky_Telem frsky_telemetry;
 #endif
 
+    uint32_t control_sensors_present;
+    uint32_t control_sensors_enabled;
+    uint32_t control_sensors_health;
+
     // Navigation control variables
     // The instantaneous desired lateral acceleration in m/s/s
     float lateral_acceleration;
@@ -358,9 +363,11 @@ private:
     static const LogStructure log_structure[];
 
     // Loiter control
-    uint16_t loiter_time_max; // How long we should loiter at the nav_waypoint (time in seconds)
-    uint32_t loiter_time;     // How long have we been loitering - The start time in millis
+    uint16_t loiter_duration; // How long we should loiter at the nav_waypoint (time in seconds)
+    uint32_t loiter_start_time;     // How long have we been loitering - The start time in millis
+    bool active_loiter; // TRUE if we actively return to the loitering waypoint if we drift off
     float distance_past_wp; // record the distance we have gone past the wp
+    bool previously_reached_wp;  // set to true if we have EVER reached the waypoint
 
     // time that rudder/steering arming has been running
     uint32_t rudder_arm_timer;
@@ -370,7 +377,17 @@ private:
     bool auto_throttle_mode;
 
     // Store the time the last GPS message was received.
-    uint32_t last_gps_msg_ms{0}; 
+    uint32_t last_gps_msg_ms{0};
+
+    // Store parameters from NAV_SET_YAW_SPEED
+    struct {
+        float turn_angle;
+        float target_speed;
+        uint32_t msg_time_ms;
+    } guided_yaw_speed;
+
+    // Guided
+    GuidedMode guided_mode;  // stores which GUIDED mode the vehicle is in
 
 private:
     // private member functions
@@ -392,6 +409,7 @@ private:
     void update_navigation();
     void send_heartbeat(mavlink_channel_t chan);
     void send_attitude(mavlink_channel_t chan);
+    void update_sensor_status_flags(void);
     void send_extended_status1(mavlink_channel_t chan);
     void send_location(mavlink_channel_t chan);
     void send_nav_controller_output(mavlink_channel_t chan);
@@ -420,6 +438,7 @@ private:
     void Log_Write_Current();
     void Log_Write_Attitude();
     void Log_Write_RC(void);
+    void Log_Write_Error(uint8_t sub_system, uint8_t error_code);
     void Log_Write_Baro(void);
     void Log_Write_Home_And_Origin();
     void Log_Write_Vehicle_Startup_Messages();
@@ -456,6 +475,7 @@ private:
     void read_trim_switch();
     void update_events(void);
     void button_update(void);
+    void stats_update();
     void navigate();
     void set_control_channels(void);
     void init_rc_in();
@@ -504,8 +524,10 @@ private:
     bool verify_command_callback(const AP_Mission::Mission_Command& cmd);
     void do_nav_wp(const AP_Mission::Mission_Command& cmd);
     void do_loiter_unlimited(const AP_Mission::Mission_Command& cmd);
+    void do_loiter_time(const AP_Mission::Mission_Command& cmd);
     bool verify_nav_wp(const AP_Mission::Mission_Command& cmd);
-    bool verify_loiter_unlim();
+    bool verify_loiter_unlimited(const AP_Mission::Mission_Command& cmd);
+    bool verify_loiter_time(const AP_Mission::Mission_Command& cmd);
     void do_wait_delay(const AP_Mission::Mission_Command& cmd);
     void do_within_distance(const AP_Mission::Mission_Command& cmd);
     void do_change_speed(const AP_Mission::Mission_Command& cmd);
@@ -521,6 +543,12 @@ private:
     bool motor_active();
     void update_home();
     void accel_cal_update(void);
+    void nav_set_yaw_speed();
+    bool in_stationary_loiter(void);
+    void set_loiter_active(const AP_Mission::Mission_Command& cmd);
+    void Log_Write_GuidedTarget(uint8_t target_type, const Vector3f& pos_target, const Vector3f& vel_target);
+    void crash_check();
+
 public:
     bool print_log_menu(void);
     int8_t dump_log(uint8_t argc, const Menu::arg *argv);
@@ -553,6 +581,7 @@ public:
 #endif
 
     void dataflash_periodic(void);
+    void update_soft_armed();
 };
 
 #define MENU_FUNC(func) FUNCTOR_BIND(&rover, &Rover::func, int8_t, uint8_t, const Menu::arg *)

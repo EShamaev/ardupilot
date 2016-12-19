@@ -1,5 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include "Copter.h"
 
 // Code to detect a crash main ArduCopter code
@@ -105,6 +103,8 @@ void Copter::set_land_complete(bool b)
         Log_Write_Event(DATA_NOT_LANDED);
     }
     ap.land_complete = b;
+
+    g2.stats.set_flying(!b);
 
     // trigger disarm-on-land if configured
     bool disarm_on_land_configured = (g.throttle_behavior & THR_BEHAVE_DISARM_ON_LAND_DETECT) != 0;

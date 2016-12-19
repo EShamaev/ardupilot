@@ -1,5 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include "Copter.h"
 
 /*
@@ -26,14 +24,52 @@ bool Copter::loiter_init(bool ignore_checks)
         pos_control.set_accel_z(g.pilot_accel_z);
 
         // initialise position and desired velocity
-        pos_control.set_alt_target(inertial_nav.get_altitude());
-        pos_control.set_desired_velocity_z(inertial_nav.get_velocity_z());
+        if (!pos_control.is_active_z()) {
+            pos_control.set_alt_target_to_current_alt();
+            pos_control.set_desired_velocity_z(inertial_nav.get_velocity_z());
+        }
 
         return true;
     }else{
         return false;
     }
 }
+
+#if PRECISION_LANDING == ENABLED
+bool Copter::do_precision_loiter() const
+{
+    if (!_precision_loiter_enabled) {
+        return false;
+    }
+    if (ap.land_complete_maybe) {
+        return false;        // don't move on the ground
+    }
+    // if the pilot *really* wants to move the vehicle, let them....
+    if (wp_nav.get_pilot_desired_acceleration().length() > 50.0f) {
+        return false;
+    }
+    if (!precland.target_acquired()) {
+        return false; // we don't have a good vector
+    }
+    return true;
+}
+
+void Copter::precision_loiter_xy()
+{
+    wp_nav.clear_pilot_desired_acceleration();
+    Vector2f target_pos, target_vel_rel;
+    if (!precland.get_target_position_cm(target_pos)) {
+        target_pos.x = inertial_nav.get_position().x;
+        target_pos.y = inertial_nav.get_position().y;
+    }
+    if (!precland.get_target_velocity_relative_cms(target_vel_rel)) {
+        target_vel_rel.x = -inertial_nav.get_velocity().x;
+        target_vel_rel.y = -inertial_nav.get_velocity().y;
+    }
+    pos_control.set_xy_target(target_pos.x, target_pos.y);
+    pos_control.override_vehicle_velocity_xy(-target_vel_rel);
+}
+#endif
 
 // loiter_run - runs the loiter controller
 // should be called at 100hz or more
@@ -157,6 +193,12 @@ void Copter::loiter_run()
 
         // set motors to full range
         motors.set_desired_spool_state(AP_Motors::DESIRED_THROTTLE_UNLIMITED);
+
+#if PRECISION_LANDING == ENABLED
+        if (do_precision_loiter()) {
+            precision_loiter_xy();
+        }
+#endif
 
         // run loiter controller
         wp_nav.update_loiter(ekfGndSpdLimit, ekfNavVelGainScaler);

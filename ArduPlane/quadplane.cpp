@@ -1,5 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include "Plane.h"
 
 const AP_Param::GroupInfo QuadPlane::var_info[] = {
@@ -415,15 +413,16 @@ bool QuadPlane::setup(void)
         goto failed;
     }
 #endif // AP_MOTORS_CLASS
+    const static char *strUnableToAllocate = "Unable to allocate";
     if (!motors) {
-        hal.console->printf("Unable to allocate motors\n");
+        hal.console->printf("%s motors\n", strUnableToAllocate);
         goto failed;
     }
     
     AP_Param::load_object_from_eeprom(motors, motors->var_info);
     attitude_control = new AC_AttitudeControl_Multi(ahrs, aparm, *motors, loop_delta_t);
     if (!attitude_control) {
-        hal.console->printf("Unable to allocate attitude_control\n");
+        hal.console->printf("%s attitude_control\n", strUnableToAllocate);
         goto failed;
     }
     AP_Param::load_object_from_eeprom(attitude_control, attitude_control->var_info);
@@ -431,13 +430,13 @@ bool QuadPlane::setup(void)
                                     p_alt_hold, p_vel_z, pid_accel_z,
                                     p_pos_xy, pi_vel_xy);
     if (!pos_control) {
-        hal.console->printf("Unable to allocate pos_control\n");
+        hal.console->printf("%s pos_control\n", strUnableToAllocate);
         goto failed;
     }
     AP_Param::load_object_from_eeprom(pos_control, pos_control->var_info);
     wp_nav = new AC_WPNav(inertial_nav, ahrs, *pos_control, *attitude_control);
-    if (!pos_control) {
-        hal.console->printf("Unable to allocate wp_nav\n");
+    if (!wp_nav) {
+        hal.console->printf("%s wp_nav\n", strUnableToAllocate);
         goto failed;
     }
     AP_Param::load_object_from_eeprom(wp_nav, wp_nav->var_info);
@@ -858,7 +857,7 @@ float QuadPlane::assist_climb_rate_cms(void)
     float climb_rate;
     if (plane.auto_throttle_mode) {
         // use altitude_error_cm, spread over 10s interval
-        climb_rate = plane.altitude_error_cm / 10;
+        climb_rate = plane.altitude_error_cm / 10.0f;
     } else {
         // otherwise estimate from pilot input
         climb_rate = plane.g.flybywire_climb_rate * (plane.nav_pitch_cd/(float)plane.aparm.pitch_limit_max_cd);
@@ -1823,7 +1822,7 @@ void QuadPlane::check_land_complete(void)
     poscontrol.state = QPOS_LAND_COMPLETE;
     plane.gcs_send_text(MAV_SEVERITY_INFO,"Land complete");
     // reload target airspeed which could have been modified by the mission
-    plane.g.airspeed_cruise_cm.load();
+    plane.aparm.airspeed_cruise_cm.load();
 }
 
 /*

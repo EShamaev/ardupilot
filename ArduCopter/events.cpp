@@ -1,5 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include "Copter.h"
 
 /*
@@ -210,16 +208,13 @@ bool Copter::should_disarm_on_failsafe() {
         case ACRO:
             // if throttle is zero OR vehicle is landed disarm motors
             return ap.throttle_zero || ap.land_complete;
-            break;
         case AUTO:
             // if mission has not started AND vehicle is landed, disarm motors
             return !ap.auto_armed && ap.land_complete;
-            break;
         default:
             // used for AltHold, Guided, Loiter, RTL, Circle, Drift, Sport, Flip, Autotune, PosHold
             // if landed disarm
             return ap.land_complete;
-            break;
     }
 }
 

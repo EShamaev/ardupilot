@@ -1,5 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include "Plane.h"
 
 /*
@@ -87,7 +85,7 @@ const AP_Tuning_Plane::tuning_name AP_Tuning_Plane::tuning_names[] = {
 };
 
 /*
-  get a pointer to an AP_Float for a parameter, or NULL on fail
+  get a pointer to an AP_Float for a parameter, or nullptr on fail
  */
 AP_Float *AP_Tuning_Plane::get_param_pointer(uint8_t parm)
 {

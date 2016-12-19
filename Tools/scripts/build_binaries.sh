@@ -34,6 +34,20 @@ board_branch() {
     esac
 }
 
+# add board specific options
+board_options() {
+    board="$1"
+    case $board in
+        bebop)
+            # bebop needs a static build
+            echo "--static"
+            ;;
+        *)
+            echo ""
+            ;;
+    esac
+}
+
 waf() {
     if [ -x ./waf ]; then
         ./waf "$@"
@@ -152,12 +166,13 @@ addfwversion() {
     destdir="$1"
     src="$2"
     git log -1 > "$destdir/git-version.txt"
-    [ -f "$src/version.h" ] && {
+    versionfile="$src/version.h"
+    [ -f $versionfile ] && {
         shopt -s nullglob
-        version=$(grep 'define.THISFIRMWARE' version.h 2> /dev/null | cut -d'"' -f2)
+        version=$(grep 'define.THISFIRMWARE' $versionfile 2> /dev/null | cut -d'"' -f2)
         echo >> "$destdir/git-version.txt"
         echo "APMVERSION: $version" >> "$destdir/git-version.txt"
-        python $BASEDIR/Tools/PrintVersion.py >"$destdir/firmware-version.txt"
+        python $BASEDIR/Tools/PrintVersion.py $src >"$destdir/firmware-version.txt"
     }    
 }
 
@@ -219,7 +234,7 @@ build_arduplane() {
         touch $binaries/Plane/$tag
     done
     popd
-    for b in erlebrain2 navio navio2 pxf pxfmini; do
+    for b in erlebrain2 navio navio2 pxf pxfmini disco; do
         checkout ArduPlane $tag $b "" || {
             echo "Failed checkout of ArduPlane $b $tag"
             error_count=$((error_count+1))
@@ -289,7 +304,8 @@ build_arducopter() {
             ddir=$binaries/Copter/$hdate/$b-$f
             skip_build $tag $ddir && continue
             skip_frame $b $f && continue
-            waf configure --board $b --out $BUILDROOT clean \
+            options=$(board_options $b)
+            waf configure --board $b $options --out $BUILDROOT clean \
                     build --targets bin/arducopter-$f || {
                 echo "Failed build of ArduCopter $b-$f $tag"
                 error_count=$((error_count+1))

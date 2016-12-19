@@ -1,4 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 /*
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -89,6 +88,7 @@ const AP_Param::GroupInfo AP_MotorsHeli_Single::var_info[] = {
     // @Description: Feed-forward compensation to automatically add rudder input when collective pitch is increased. Can be positive or negative depending on mechanics.
     // @Range: -10 10
     // @Increment: 0.1
+    // @User: Advanced
     AP_GROUPINFO("COLYAW", 8,  AP_MotorsHeli_Single, _collective_yaw_effect, 0),
 
     // @Param: FLYBAR_MODE
@@ -454,10 +454,15 @@ void AP_MotorsHeli_Single::move_actuators(float roll_out, float pitch_out, float
 
     hal.rcout->cork();
 
+    // rescale from -1..1, so we can use the pwm calc that includes trim
+    servo1_out = 2*servo1_out - 1;
+    servo2_out = 2*servo2_out - 1;
+    servo3_out = 2*servo3_out - 1;
+    
     // actually move the servos
-    rc_write(AP_MOTORS_MOT_1, calc_pwm_output_0to1(servo1_out, _swash_servo_1));
-    rc_write(AP_MOTORS_MOT_2, calc_pwm_output_0to1(servo2_out, _swash_servo_2));
-    rc_write(AP_MOTORS_MOT_3, calc_pwm_output_0to1(servo3_out, _swash_servo_3));
+    rc_write(AP_MOTORS_MOT_1, calc_pwm_output_1to1(servo1_out, _swash_servo_1));
+    rc_write(AP_MOTORS_MOT_2, calc_pwm_output_1to1(servo2_out, _swash_servo_2));
+    rc_write(AP_MOTORS_MOT_3, calc_pwm_output_1to1(servo3_out, _swash_servo_3));
 
     // update the yaw rate using the tail rotor/servo
     move_yaw(yaw_out + yaw_offset);
@@ -507,7 +512,7 @@ void AP_MotorsHeli_Single::servo_test()
 
     if ((_servo_test_cycle_time >= 0.0f && _servo_test_cycle_time < 0.5f)||                                   // Tilt swash back
         (_servo_test_cycle_time >= 6.0f && _servo_test_cycle_time < 6.5f)){
-        _pitch_test += (1.0f / (_loop_rate/2));
+        _pitch_test += (1.0f / (_loop_rate / 2.0f));
         _oscillate_angle += 8 * M_PI / _loop_rate;
         _yaw_test = 0.5f * sinf(_oscillate_angle);
     } else if ((_servo_test_cycle_time >= 0.5f && _servo_test_cycle_time < 4.5f)||                            // Roll swash around
@@ -518,7 +523,7 @@ void AP_MotorsHeli_Single::servo_test()
         _yaw_test = sinf(_oscillate_angle);
     } else if ((_servo_test_cycle_time >= 4.5f && _servo_test_cycle_time < 5.0f)||                            // Return swash to level
                (_servo_test_cycle_time >= 10.5f && _servo_test_cycle_time < 11.0f)){
-        _pitch_test -= (1.0f / (_loop_rate/2));
+        _pitch_test -= (1.0f / (_loop_rate / 2.0f));
         _oscillate_angle += 8 * M_PI / _loop_rate;
         _yaw_test = 0.5f * sinf(_oscillate_angle);
     } else if (_servo_test_cycle_time >= 5.0f && _servo_test_cycle_time < 6.0f){                              // Raise swash to top

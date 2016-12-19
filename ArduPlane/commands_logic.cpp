@@ -1,5 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include "Plane.h"
 
 /********************************************************************************/
@@ -15,26 +13,20 @@ bool Plane::start_command(const AP_Mission::Mission_Command& cmd)
         DataFlash.Log_Write_Mission_Cmd(mission, cmd);
     }
 
+    landing.reset();
+
     // special handling for nav vs non-nav commands
     if (AP_Mission::is_nav_cmd(cmd)) {
         // set land_complete to false to stop us zeroing the throttle
-        auto_state.land_complete = false;
-        auto_state.land_pre_flare = false;
         auto_state.sink_rate = 0;
 
         // set takeoff_complete to true so we don't add extra elevator
         // except in a takeoff
         auto_state.takeoff_complete = true;
 
-        // if a go around had been commanded, clear it now.
-        auto_state.commanded_go_around = false;
-
         // start non-idle
         auto_state.idle_mode = false;
         
-        // once landed, post some landing statistics to the GCS
-        auto_state.post_landing_stats = false;
-
         nav_controller->set_data_is_stale();
 
         // reset loiter start time. New command is a new loiter
@@ -146,8 +138,7 @@ bool Plane::start_command(const AP_Mission::Mission_Command& cmd)
         break;
 
     case MAV_CMD_DO_LAND_START:
-        //ensure go around hasn't been set
-        auto_state.commanded_go_around = false;
+        // handled in landing.reset()
         break;
 
     case MAV_CMD_DO_FENCE_ENABLE:
@@ -160,7 +151,7 @@ bool Plane::start_command(const AP_Mission::Mission_Command& cmd)
             }
         } else { //commanding to only disable floor
             if (! geofence_set_floor_enabled(false)) {
-                gcs_send_text_fmt(MAV_SEVERITY_WARNING, "Unabled to disable fence floor");
+                gcs_send_text_fmt(MAV_SEVERITY_WARNING, "Unable to disable fence floor");
             } else {
                 gcs_send_text_fmt(MAV_SEVERITY_WARNING, "Fence floor disabled");
             }
@@ -242,6 +233,7 @@ Verify command Handlers
 Each type of mission element has a "verify" operation. The verify
 operation returns true when the mission element has completed and we
 should move onto the next mission element.
+Return true if we do not recognize the command so that we move on to the next command
 *******************************************************************************/
 
 bool Plane::verify_command(const AP_Mission::Mission_Command& cmd)        // Returns true if command complete
@@ -251,11 +243,17 @@ bool Plane::verify_command(const AP_Mission::Mission_Command& cmd)        // Ret
     case MAV_CMD_NAV_TAKEOFF:
         return verify_takeoff();
 
-    case MAV_CMD_NAV_LAND:
-        return verify_land();
-
     case MAV_CMD_NAV_WAYPOINT:
         return verify_nav_wp(cmd);
+
+    case MAV_CMD_NAV_LAND:
+        {
+        // use rangefinder to correct if possible
+        float height = height_above_target() - rangefinder_correction();
+
+        return landing.verify_land(flight_stage, prev_WP_loc, next_WP_loc, current_loc,
+                auto_state.takeoff_altitude_rel_cm, height, auto_state.sink_rate, auto_state.wp_proportion, auto_state.last_flying_ms, arming.is_armed(), is_flying(), rangefinder_state.in_range, throttle_suppressed);
+        }
 
     case MAV_CMD_NAV_LOITER_UNLIM:
         return verify_loiter_unlim();
@@ -278,6 +276,12 @@ bool Plane::verify_command(const AP_Mission::Mission_Command& cmd)        // Ret
     case MAV_CMD_NAV_ALTITUDE_WAIT:
         return verify_altitude_wait(cmd);
 
+    case MAV_CMD_NAV_VTOL_TAKEOFF:
+        return quadplane.verify_vtol_takeoff(cmd);
+
+    case MAV_CMD_NAV_VTOL_LAND:
+        return quadplane.verify_vtol_land();
+
     // Conditional commands
 
     case MAV_CMD_CONDITION_DELAY:
@@ -290,14 +294,7 @@ bool Plane::verify_command(const AP_Mission::Mission_Command& cmd)        // Ret
     case MAV_CMD_DO_PARACHUTE:
         // assume parachute was released successfully
         return true;
-        break;
 #endif
-
-    case MAV_CMD_NAV_VTOL_TAKEOFF:
-        return quadplane.verify_vtol_takeoff(cmd);
-
-    case MAV_CMD_NAV_VTOL_LAND:
-        return quadplane.verify_vtol_land();
         
     // do commands (always return true)
     case MAV_CMD_DO_CHANGE_SPEED:
@@ -306,28 +303,24 @@ bool Plane::verify_command(const AP_Mission::Mission_Command& cmd)        // Ret
     case MAV_CMD_DO_SET_RELAY:
     case MAV_CMD_DO_REPEAT_SERVO:
     case MAV_CMD_DO_REPEAT_RELAY:
-    case MAV_CMD_DO_CONTROL_VIDEO:
-    case MAV_CMD_DO_DIGICAM_CONFIGURE:
-    case MAV_CMD_DO_DIGICAM_CONTROL:
-    case MAV_CMD_DO_SET_CAM_TRIGG_DIST:
-    case MAV_CMD_NAV_ROI:
-    case MAV_CMD_DO_MOUNT_CONFIGURE:
     case MAV_CMD_DO_INVERTED_FLIGHT:
     case MAV_CMD_DO_LAND_START:
     case MAV_CMD_DO_FENCE_ENABLE:
     case MAV_CMD_DO_AUTOTUNE_ENABLE:
+    case MAV_CMD_DO_CONTROL_VIDEO:
+    case MAV_CMD_DO_DIGICAM_CONFIGURE:
+    case MAV_CMD_DO_DIGICAM_CONTROL:
+    case MAV_CMD_DO_SET_CAM_TRIGG_DIST:
+    case MAV_CMD_DO_SET_ROI:
+    case MAV_CMD_DO_MOUNT_CONTROL:
     case MAV_CMD_DO_VTOL_TRANSITION:
     case MAV_CMD_DO_ENGINE_CONTROL:
         return true;
 
     default:
         // error message
-        if (AP_Mission::is_nav_cmd(cmd)) {
-            gcs_send_text(MAV_SEVERITY_WARNING,"Verify nav. Invalid or no current nav cmd");
-        }else{
-        gcs_send_text(MAV_SEVERITY_WARNING,"Verify condition. Invalid or no current condition cmd");
-    }
-        // return true so that we do not get stuck at this command
+        gcs_send_text_fmt(MAV_SEVERITY_WARNING,"Skipping invalid cmd #%i",cmd.id);
+        // return true if we do not recognize the command so that we move on to the next command
         return true;
     }
 }
@@ -389,7 +382,6 @@ void Plane::do_nav_wp(const AP_Mission::Mission_Command& cmd)
 
 void Plane::do_land(const AP_Mission::Mission_Command& cmd)
 {
-    auto_state.commanded_go_around = false;
     set_next_WP(cmd.content.location);
 
     // configure abort altitude and pitch
@@ -405,12 +397,8 @@ void Plane::do_land(const AP_Mission::Mission_Command& cmd)
         auto_state.takeoff_pitch_cd = 1000;
     }
 
-    auto_state.land_slope = 0;
-
-#if RANGEFINDER_ENABLED == ENABLED
     // zero rangefinder state, start to accumulate good samples now
     memset(&rangefinder_state, 0, sizeof(rangefinder_state));
-#endif
 }
 
 void Plane::loiter_set_direction_wp(const AP_Mission::Mission_Command& cmd)
@@ -845,13 +833,13 @@ void Plane::do_change_speed(const AP_Mission::Mission_Command& cmd)
     {
     case 0:             // Airspeed
         if (cmd.content.speed.target_ms > 0) {
-            g.airspeed_cruise_cm.set(cmd.content.speed.target_ms * 100);
+            aparm.airspeed_cruise_cm.set(cmd.content.speed.target_ms * 100);
             gcs_send_text_fmt(MAV_SEVERITY_INFO, "Set airspeed %u m/s", (unsigned)cmd.content.speed.target_ms);
         }
         break;
     case 1:             // Ground speed
         gcs_send_text_fmt(MAV_SEVERITY_INFO, "Set groundspeed %u", (unsigned)cmd.content.speed.target_ms);
-        g.min_gndspeed_cm.set(cmd.content.speed.target_ms * 100);
+        aparm.min_gndspeed_cm.set(cmd.content.speed.target_ms * 100);
         break;
     }
 

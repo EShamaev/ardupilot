@@ -1,4 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 /*
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -15,13 +14,15 @@
 */
 #include <AP_HAL/AP_HAL.h>
 
-#if CONFIG_HAL_BOARD == HAL_BOARD_LINUX
 #include "AP_InertialSensor_MPU9250.h"
 
 #include <assert.h>
 #include <utility>
+#include <stdio.h>
 
-#include <AP_HAL_Linux/GPIO.h>
+#include <AP_HAL/GPIO.h>
+
+#define debug(fmt, args ...)  do {printf("MPU9250: " fmt "\n", ## args); } while(0)
 
 extern const AP_HAL::HAL &hal;
 
@@ -43,9 +44,7 @@ extern const AP_HAL::HAL &hal;
 #define MPUREG_ZA_OFFS_H                                0x0D    // Z axis accelerometer offset (high byte)
 #define MPUREG_ZA_OFFS_L                                0x0E    // Z axis accelerometer offset (low byte)
 
-// MPU6000 & MPU9250 registers
-// not sure if present in MPU9250
-// #define MPUREG_PRODUCT_ID                               0x0C    // Product ID Register
+// MPU9250 registers
 #define MPUREG_XG_OFFS_USRH                     0x13    // X axis gyro offset (high byte)
 #define MPUREG_XG_OFFS_USRL                     0x14    // X axis gyro offset (low byte)
 #define MPUREG_YG_OFFS_USRH                     0x15    // Y axis gyro offset (high byte)
@@ -60,6 +59,7 @@ extern const AP_HAL::HAL &hal;
 #       define MPUREG_SMPLRT_100HZ                              0x09
 #       define MPUREG_SMPLRT_50HZ                               0x13
 #define MPUREG_CONFIG                                           0x1A
+#define MPUREG_CONFIG_FIFO_MODE_STOP                    0x40
 #define MPUREG_GYRO_CONFIG                                      0x1B
 // bit definitions for MPUREG_GYRO_CONFIG
 #       define BITS_GYRO_FS_250DPS                              0x00
@@ -71,11 +71,20 @@ extern const AP_HAL::HAL &hal;
 #       define BITS_GYRO_YGYRO_SELFTEST                 0x40
 #       define BITS_GYRO_XGYRO_SELFTEST                 0x80
 #define MPUREG_ACCEL_CONFIG                             0x1C
+#define MPUREG_ACCEL_CONFIG2                            0x1D
 #define MPUREG_MOT_THR                                  0x1F    // detection threshold for Motion interrupt generation.  Motion is detected when the absolute value of any of the accelerometer measurements exceeds this
 #define MPUREG_MOT_DUR                                  0x20    // duration counter threshold for Motion interrupt generation. The duration counter ticks at 1 kHz, therefore MOT_DUR has a unit of 1 LSB = 1 ms
 #define MPUREG_ZRMOT_THR                                0x21    // detection threshold for Zero Motion interrupt generation.
 #define MPUREG_ZRMOT_DUR                                0x22    // duration counter threshold for Zero Motion interrupt generation. The duration counter ticks at 16 Hz, therefore ZRMOT_DUR has a unit of 1 LSB = 64 ms.
 #define MPUREG_FIFO_EN                                  0x23
+#       define BIT_TEMP_FIFO_EN                                0x80
+#       define BIT_XG_FIFO_EN                                  0x40
+#       define BIT_YG_FIFO_EN                                  0x20
+#       define BIT_ZG_FIFO_EN                                  0x10
+#       define BIT_ACCEL_FIFO_EN                               0x08
+#       define BIT_SLV2_FIFO_EN                                0x04
+#       define BIT_SLV1_FIFO_EN                                0x02
+#       define BIT_SLV0_FIFI_EN0                               0x01
 #define MPUREG_INT_PIN_CFG                              0x37
 #       define BIT_INT_RD_CLEAR                                 0x10    // clear the interrupt when any read occurs
 #       define BIT_LATCH_INT_EN                                 0x20    // latch data ready pin
@@ -176,13 +185,11 @@ extern const AP_HAL::HAL &hal;
 #define BITS_DLPF_CFG_5HZ                               0x06
 #define BITS_DLPF_CFG_2100HZ_NOLPF              0x07
 #define BITS_DLPF_CFG_MASK                              0x07
+#define BITS_DLPF_FCHOICE_B                             0x08
 
-#define DEFAULT_SMPLRT_DIV MPUREG_SMPLRT_1000HZ
-#define DEFAULT_SAMPLE_RATE (1000 / (DEFAULT_SMPLRT_DIV + 1))
-
-#define MPU9250_SAMPLE_SIZE 14
-#define MPU9250_MAX_FIFO_SAMPLES 3
-#define MAX_DATA_READ (MPU9250_MAX_FIFO_SAMPLES * MPU9250_SAMPLE_SIZE)
+#define MPU_SAMPLE_SIZE 14
+#define MPU_FIFO_DOWNSAMPLE_COUNT 8
+#define MPU_FIFO_BUFFER_LEN 16
 
 #define int16_val(v, idx) ((int16_t)(((uint16_t)v[2*idx] << 8) | v[2*idx+1]))
 #define uint16_val(v, idx)(((uint16_t)v[2*idx] << 8) | v[2*idx+1])
@@ -202,38 +209,32 @@ static const float GYRO_SCALE = 0.0174532f / 16.4f;
  */
 
 AP_InertialSensor_MPU9250::AP_InertialSensor_MPU9250(AP_InertialSensor &imu,
-                                                     AP_HAL::OwnPtr<AP_HAL::Device> dev)
+                                                     AP_HAL::OwnPtr<AP_HAL::Device> dev,
+                                                     enum Rotation rotation)
     : AP_InertialSensor_Backend(imu)
-#if CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_PXF
-    , _default_rotation(ROTATION_ROLL_180_YAW_270)
-#elif CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_NAVIO || \
-      CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_NAVIO2
-    , _default_rotation(ROTATION_NONE)
-#elif CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_ERLEBRAIN2 || \
-      CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_PXFMINI
-    , _default_rotation(ROTATION_YAW_270)
-#elif CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_BBBMINI
-    , _default_rotation(ROTATION_NONE)
-#elif CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_BH
-    , _default_rotation(ROTATION_NONE)
-#else
-    /* rotate for PXF (and default for other boards) */
-    , _default_rotation(ROTATION_ROLL_180_YAW_90)
-#endif
+    , _temp_filter(1000, 1)
     , _dev(std::move(dev))
+    , _rotation(rotation)
 {
 }
 
 AP_InertialSensor_MPU9250::~AP_InertialSensor_MPU9250()
 {
+    if (_fifo_buffer != nullptr) {
+        hal.util->dma_free(_fifo_buffer, MPU_FIFO_BUFFER_LEN * MPU_SAMPLE_SIZE);
+    }
     delete _auxiliary_bus;
 }
 
 AP_InertialSensor_Backend *AP_InertialSensor_MPU9250::probe(AP_InertialSensor &imu,
-                                                            AP_HAL::OwnPtr<AP_HAL::I2CDevice> dev)
+                                                            AP_HAL::OwnPtr<AP_HAL::I2CDevice> dev,
+                                                            enum Rotation rotation)
 {
+    if (!dev) {
+        return nullptr;
+    }
     AP_InertialSensor_MPU9250 *sensor =
-        new AP_InertialSensor_MPU9250(imu, std::move(dev));
+        new AP_InertialSensor_MPU9250(imu, std::move(dev), rotation);
     if (!sensor || !sensor->_init()) {
         delete sensor;
         return nullptr;
@@ -245,13 +246,17 @@ AP_InertialSensor_Backend *AP_InertialSensor_MPU9250::probe(AP_InertialSensor &i
 
 
 AP_InertialSensor_Backend *AP_InertialSensor_MPU9250::probe(AP_InertialSensor &imu,
-                                                            AP_HAL::OwnPtr<AP_HAL::SPIDevice> dev)
+                                                            AP_HAL::OwnPtr<AP_HAL::SPIDevice> dev,
+                                                            enum Rotation rotation)
 {
+    if (!dev) {
+        return nullptr;
+    }
     AP_InertialSensor_MPU9250 *sensor;
 
     dev->set_read_flag(0x80);
 
-    sensor = new AP_InertialSensor_MPU9250(imu, std::move(dev));
+    sensor = new AP_InertialSensor_MPU9250(imu, std::move(dev), rotation);
     if (!sensor || !sensor->_init()) {
         delete sensor;
         return nullptr;
@@ -263,28 +268,35 @@ AP_InertialSensor_Backend *AP_InertialSensor_MPU9250::probe(AP_InertialSensor &i
 
 bool AP_InertialSensor_MPU9250::_init()
 {
-    hal.scheduler->suspend_timer_procs();
     bool success = _hardware_init();
-    hal.scheduler->resume_timer_procs();
-
-#if MPU9250_DEBUG
-    _dump_registers();
-#endif
-
     return success;
+}
+
+void AP_InertialSensor_MPU9250::_fifo_reset()
+{
+    uint8_t user_ctrl = _last_stat_user_ctrl;
+    user_ctrl &= ~(BIT_USER_CTRL_FIFO_RESET | BIT_USER_CTRL_FIFO_EN);
+    _dev->set_speed(AP_HAL::Device::SPEED_LOW);
+    _register_write(MPUREG_FIFO_EN, 0);
+    _register_write(MPUREG_USER_CTRL, user_ctrl);
+    _register_write(MPUREG_USER_CTRL, user_ctrl | BIT_USER_CTRL_FIFO_RESET);
+    _register_write(MPUREG_USER_CTRL, user_ctrl | BIT_USER_CTRL_FIFO_EN);
+    _register_write(MPUREG_FIFO_EN, BIT_XG_FIFO_EN | BIT_YG_FIFO_EN |
+                    BIT_ZG_FIFO_EN | BIT_ACCEL_FIFO_EN | BIT_TEMP_FIFO_EN, true);
+    hal.scheduler->delay_microseconds(1);
+    _dev->set_speed(AP_HAL::Device::SPEED_HIGH);
+    _last_stat_user_ctrl = user_ctrl | BIT_USER_CTRL_FIFO_EN;
 }
 
 bool AP_InertialSensor_MPU9250::_has_auxiliary_bus()
 {
-    return _dev->bus_type != AP_HAL::Device::BUS_TYPE_I2C;
+    return _dev->bus_type() != AP_HAL::Device::BUS_TYPE_I2C;
 }
 
 void AP_InertialSensor_MPU9250::start()
 {
-    hal.scheduler->suspend_timer_procs();
-
-    if (!_dev->get_semaphore()->take(100)) {
-        AP_HAL::panic("MPU92500: Unable to get semaphore");
+    if (!_dev->get_semaphore()->take(0)) {
+        return;
     }
 
     // initially run the bus at low speed
@@ -294,23 +306,44 @@ void AP_InertialSensor_MPU9250::start()
     _register_write(MPUREG_PWR_MGMT_2, 0x00);
     hal.scheduler->delay(1);
 
-    // disable sensor filtering
-    _register_write(MPUREG_CONFIG, BITS_DLPF_CFG_256HZ_NOLPF2);
+    // always use FIFO
+    _fifo_reset();
 
+    // grab the used instances
+    _gyro_instance = _imu.register_gyro(1000, _dev->get_bus_id_devtype(DEVTYPE_GYR_MPU9250));
+    _accel_instance = _imu.register_accel(1000, _dev->get_bus_id_devtype(DEVTYPE_ACC_MPU9250));
+
+    if (enable_fast_sampling(_accel_instance) && _dev->bus_type() == AP_HAL::Device::BUS_TYPE_SPI) {
+        _fast_sampling = true;
+        hal.console->printf("MPU9250: enabled fast sampling\n");
+    }
+    
+    if (_fast_sampling) {
+        // setup for fast sampling
+        _register_write(MPUREG_CONFIG, BITS_DLPF_CFG_256HZ_NOLPF2 | MPUREG_CONFIG_FIFO_MODE_STOP, true);
+    } else {
+        _register_write(MPUREG_CONFIG, BITS_DLPF_CFG_188HZ | MPUREG_CONFIG_FIFO_MODE_STOP, true);
+    }
+    
     // set sample rate to 1kHz, and use the 2 pole filter to give the
     // desired rate
-    _register_write(MPUREG_SMPLRT_DIV, DEFAULT_SMPLRT_DIV);
+    _register_write(MPUREG_SMPLRT_DIV, 0, true);
     hal.scheduler->delay(1);
 
     // Gyro scale 2000º/s
-    _register_write(MPUREG_GYRO_CONFIG, BITS_GYRO_FS_2000DPS);
+    _register_write(MPUREG_GYRO_CONFIG, BITS_GYRO_FS_2000DPS, true);
     hal.scheduler->delay(1);
 
-    _product_id = AP_PRODUCT_ID_MPU9250;
-
     // RM-MPU-9250A-00.pdf, pg. 15, select accel full scale 16g
-    _register_write(MPUREG_ACCEL_CONFIG,3<<3);
+    _register_write(MPUREG_ACCEL_CONFIG,3<<3, true);
 
+    if (_fast_sampling) {
+        // setup ACCEL_FCHOICE for 4kHz sampling
+        _register_write(MPUREG_ACCEL_CONFIG2, 0x08, true);
+    } else {
+        _register_write(MPUREG_ACCEL_CONFIG2, 0x00, true);
+    }
+    
     // configure interrupt to fire when new data arrives
     _register_write(MPUREG_INT_ENABLE, BIT_RAW_RDY_EN);
 
@@ -325,15 +358,17 @@ void AP_InertialSensor_MPU9250::start()
 
     _dev->get_semaphore()->give();
 
-    // grab the used instances
-    _gyro_instance = _imu.register_gyro(DEFAULT_SAMPLE_RATE);
-    _accel_instance = _imu.register_accel(DEFAULT_SAMPLE_RATE);
+    set_gyro_orientation(_gyro_instance, _rotation);
+    set_accel_orientation(_accel_instance, _rotation);
 
-    hal.scheduler->resume_timer_procs();
+    // allocate fifo buffer
+    _fifo_buffer = (uint8_t *)hal.util->dma_allocate(MPU_FIFO_BUFFER_LEN * MPU_SAMPLE_SIZE);
+    if (_fifo_buffer == nullptr) {
+        AP_HAL::panic("MPU9250: Unable to allocate FIFO buffer");
+    }
 
     // start the timer process to read samples
-    hal.scheduler->register_timer_process(
-        FUNCTOR_BIND_MEMBER(&AP_InertialSensor_MPU9250::_poll_data, void));
+    _dev->register_periodic_callback(1000, FUNCTOR_BIND_MEMBER(&AP_InertialSensor_MPU9250::_read_sample, bool));
 }
 
 /*
@@ -344,8 +379,19 @@ bool AP_InertialSensor_MPU9250::update()
     update_gyro(_gyro_instance);
     update_accel(_accel_instance);
 
+    _publish_temperature(_accel_instance, _temp_filtered);
+    
     return true;
 }
+
+/*
+  accumulate new samples
+ */
+void AP_InertialSensor_MPU9250::accumulate()
+{
+    // nothing to do
+}
+
 
 AuxiliaryBus *AP_InertialSensor_MPU9250::get_auxiliary_bus()
 {
@@ -354,7 +400,7 @@ AuxiliaryBus *AP_InertialSensor_MPU9250::get_auxiliary_bus()
     }
 
     if (_has_auxiliary_bus()) {
-        _auxiliary_bus = new AP_MPU9250_AuxiliaryBus(*this);
+        _auxiliary_bus = new AP_MPU9250_AuxiliaryBus(*this, _dev->get_bus_id());
     }
 
     return _auxiliary_bus;
@@ -374,63 +420,220 @@ bool AP_InertialSensor_MPU9250::_data_ready(uint8_t int_status)
     return (int_status & BIT_RAW_RDY_INT) != 0;
 }
 
-/*
- * Timer process to poll for new data from the MPU9250.
- */
-void AP_InertialSensor_MPU9250::_poll_data()
+
+bool AP_InertialSensor_MPU9250::_accumulate(uint8_t *samples, uint8_t n_samples)
 {
-    if (!_dev->get_semaphore()->take_nonblocking()) {
-        return;
+    for (uint8_t i = 0; i < n_samples; i++) {
+        const uint8_t *data = samples + MPU_SAMPLE_SIZE * i;
+        Vector3f accel, gyro;
+
+        accel = Vector3f(int16_val(data, 1),
+                         int16_val(data, 0),
+                         -int16_val(data, 2));
+        accel *= MPU9250_ACCEL_SCALE_1G;
+
+        int16_t t2 = int16_val(data, 3);
+        if (!_check_raw_temp(t2)) {
+            debug("temp reset %d %d %d", _raw_temp, t2, _raw_temp-t2);
+            _fifo_reset();
+            return false;
+        }
+        float temp = t2/340.0f + 36.53f;
+        
+        gyro = Vector3f(int16_val(data, 5),
+                        int16_val(data, 4),
+                        -int16_val(data, 6));
+        gyro *= GYRO_SCALE;
+
+        _rotate_and_correct_accel(_accel_instance, accel);
+        _rotate_and_correct_gyro(_gyro_instance, gyro);
+
+        _notify_new_accel_raw_sample(_accel_instance, accel, AP_HAL::micros64());
+        _notify_new_gyro_raw_sample(_gyro_instance, gyro);
+
+        _temp_filtered = _temp_filter.apply(temp);
     }
-
-    _read_sample();
-
-    _dev->get_semaphore()->give();
+    return true;
 }
 
-void AP_InertialSensor_MPU9250::_accumulate(uint8_t *rx)
+/*
+  when doing fast sampling the sensor gives us 8k samples/second. Every 2nd accel sample is a duplicate.
+
+  To filter this we first apply a 1p low pass filter at 188Hz, then we
+  average over 8 samples to bring the data rate down to 1kHz. This
+  gives very good aliasing rejection at frequencies well above what
+  can be handled with 1kHz sample rates.
+ */
+bool AP_InertialSensor_MPU9250::_accumulate_fast_sampling(uint8_t *samples, uint8_t n_samples)
 {
-    Vector3f accel, gyro;
+    int32_t tsum = 0;
+    const int32_t clip_limit = AP_INERTIAL_SENSOR_ACCEL_CLIP_THRESH_MSS / MPU9250_ACCEL_SCALE_1G;
+    bool clipped = false;
+    bool ret = true;
+    
+    for (uint8_t i = 0; i < n_samples; i++) {
+        const uint8_t *data = samples + MPU_SAMPLE_SIZE * i;
 
-    accel = Vector3f(int16_val(rx, 1),
-                     int16_val(rx, 0),
-                     -int16_val(rx, 2));
-    accel *= MPU9250_ACCEL_SCALE_1G;
-    accel.rotate(_default_rotation);
-    _rotate_and_correct_accel(_accel_instance, accel);
-    _notify_new_accel_raw_sample(_accel_instance, accel);
+        // use temperatue to detect FIFO corruption
+        int16_t t2 = int16_val(data, 3);
+        if (!_check_raw_temp(t2)) {
+            debug("temp reset %d %d %d", _raw_temp, t2, _raw_temp - t2);
+            _fifo_reset();
+            ret = false;
+            break;
+        }
+        tsum += t2;
 
-    gyro = Vector3f(int16_val(rx, 5),
-                    int16_val(rx, 4),
-                    -int16_val(rx, 6));
-    gyro *= GYRO_SCALE;
-    gyro.rotate(_default_rotation);
-    _rotate_and_correct_gyro(_gyro_instance, gyro);
-    _notify_new_gyro_raw_sample(_gyro_instance, gyro);
+        if ((_accum.count & 1) == 0) {
+            // accels are at 4kHz not 8kHz
+            Vector3f a(int16_val(data, 1),
+                       int16_val(data, 0),
+                       -int16_val(data, 2));
+            if (fabsf(a.x) > clip_limit ||
+                fabsf(a.y) > clip_limit ||
+                fabsf(a.z) > clip_limit) {
+                clipped = true;
+            }
+            _accum.accel += _accum.accel_filter.apply(a);
+        }
+        Vector3f g(int16_val(data, 5),
+                   int16_val(data, 4),
+                   -int16_val(data, 6));
+
+        _accum.gyro += _accum.gyro_filter.apply(g);
+        _accum.count++;
+
+        if (_accum.count == MPU_FIFO_DOWNSAMPLE_COUNT) {
+            float ascale = MPU9250_ACCEL_SCALE_1G / (MPU_FIFO_DOWNSAMPLE_COUNT/2);
+            _accum.accel *= ascale;
+            
+            float gscale = GYRO_SCALE / MPU_FIFO_DOWNSAMPLE_COUNT;
+            _accum.gyro *= gscale;
+            
+            _rotate_and_correct_accel(_accel_instance, _accum.accel);
+            _rotate_and_correct_gyro(_gyro_instance, _accum.gyro);
+            
+            _notify_new_accel_raw_sample(_accel_instance, _accum.accel, AP_HAL::micros64(), false);
+            _notify_new_gyro_raw_sample(_gyro_instance, _accum.gyro);
+            
+            _accum.accel.zero();
+            _accum.gyro.zero();
+            _accum.count = 0;
+        }
+    }
+
+    if (clipped) {
+        increment_clip_count(_accel_instance);
+    }
+
+    if (ret) {
+        float temp = (static_cast<float>(tsum)/n_samples)/340.0f + 36.53f;
+        _temp_filtered = _temp_filter.apply(temp);
+    }
+
+    return ret;
+}
+
+
+/*
+  fetch temperature in order to detect FIFO sync errors
+*/
+bool AP_InertialSensor_MPU9250::_check_raw_temp(int16_t t2)
+{
+    if (abs(t2 - _raw_temp) < 400) {
+        // cached copy OK
+        return true;
+    }
+    uint8_t trx[2];
+    if (_block_read(MPUREG_TEMP_OUT_H, trx, 2)) {
+        _raw_temp = int16_val(trx, 0);
+    }
+    return (abs(t2 - _raw_temp) < 400);
 }
 
 
 /*
  * read from the data registers and update filtered data
  */
-void AP_InertialSensor_MPU9250::_read_sample()
+bool AP_InertialSensor_MPU9250::_read_sample()
 {
-    /* one register address followed by seven 2-byte registers */
-    struct PACKED {
-        uint8_t int_status;
-        uint8_t d[14];
-    } rx;
-
-    if (!_block_read(MPUREG_INT_STATUS, (uint8_t *) &rx, sizeof(rx))) {
-        hal.console->printf("MPU9250: error reading sample\n");
-        return;
+    uint8_t n_samples;
+    uint16_t bytes_read;
+    uint8_t *rx = _fifo_buffer;
+    bool need_reset = false;
+    
+    if (!_block_read(MPUREG_FIFO_COUNTH, rx, 2)) {
+        goto check_registers;
     }
 
-    if (!_data_ready(rx.int_status)) {
-        return;
+    bytes_read = uint16_val(rx, 0);
+    n_samples = bytes_read / MPU_SAMPLE_SIZE;
+
+    if (n_samples == 0) {
+        /* Not enough data in FIFO */
+        goto check_registers;
     }
 
-    _accumulate(rx.d);
+    /*
+      testing has shown that if we have more than 32 samples in the
+      FIFO then some of those samples will be corrupt. It always is
+      the ones at the end of the FIFO, so clear those with a reset
+      once we've read the first 24. Reading 24 gives us the normal
+      number of samples for fast sampling at 400Hz
+     */
+    if (n_samples > 32) {
+        need_reset = true;
+        n_samples = 24;
+    }
+    
+    while (n_samples > 0) {
+        uint8_t n = MIN(MPU_FIFO_BUFFER_LEN, n_samples);
+        if (!_dev->set_chip_select(true)) {
+            if (!_block_read(MPUREG_FIFO_R_W, rx, n * MPU_SAMPLE_SIZE)) {
+                goto check_registers;
+            }
+        } else {
+            // this ensures we keep things nicely setup for DMA
+            uint8_t reg = MPUREG_FIFO_R_W | 0x80;
+            if (!_dev->transfer(&reg, 1, nullptr, 0)) {
+                _dev->set_chip_select(false);
+                goto check_registers;
+            }
+            memset(rx, 0, n * MPU_SAMPLE_SIZE);
+            if (!_dev->transfer(rx, n * MPU_SAMPLE_SIZE, rx, n * MPU_SAMPLE_SIZE)) {
+                hal.console->printf("MPU60x0: error in fifo read %u bytes\n", n * MPU_SAMPLE_SIZE);
+                _dev->set_chip_select(false);
+                goto check_registers;
+            }
+            _dev->set_chip_select(false);
+        }
+        if (_fast_sampling) {
+            if (!_accumulate_fast_sampling(rx, n)) {
+                debug("stop at %u of %u", n_samples, bytes_read/MPU_SAMPLE_SIZE);
+                break;
+            }
+        } else {
+            if (!_accumulate(rx, n)) {
+                break;
+            }
+        }
+        n_samples -= n;
+    }
+
+    if (need_reset) {
+        //debug("fifo reset %u", bytes_read/MPU_SAMPLE_SIZE);
+        _fifo_reset();
+    }
+    
+check_registers:
+    // check next register value for correctness
+    _dev->set_speed(AP_HAL::Device::SPEED_LOW);
+    if (!_dev->check_next_register()) {
+        _inc_gyro_error_count(_gyro_instance);
+        _inc_accel_error_count(_accel_instance);
+    }
+    _dev->set_speed(AP_HAL::Device::SPEED_HIGH);
+    return true;
 }
 
 bool AP_InertialSensor_MPU9250::_block_read(uint8_t reg, uint8_t *buf,
@@ -446,16 +649,19 @@ uint8_t AP_InertialSensor_MPU9250::_register_read(uint8_t reg)
     return val;
 }
 
-void AP_InertialSensor_MPU9250::_register_write(uint8_t reg, uint8_t val)
+void AP_InertialSensor_MPU9250::_register_write(uint8_t reg, uint8_t val, bool checked)
 {
-    _dev->write_register(reg, val);
+    _dev->write_register(reg, val, checked);
 }
 
 bool AP_InertialSensor_MPU9250::_hardware_init(void)
 {
-    if (!_dev->get_semaphore()->take(100)) {
-        AP_HAL::panic("MPU9250: Unable to get semaphore");
+    if (!_dev->get_semaphore()->take(0)) {
+        return false;
     }
+
+    // setup for register checking
+    _dev->setup_checked_registers(6, 20);
 
     // initially run the bus at low speed
     _dev->set_speed(AP_HAL::Device::SPEED_LOW);
@@ -469,13 +675,14 @@ bool AP_InertialSensor_MPU9250::_hardware_init(void)
     // Chip reset
     uint8_t tries;
     for (tries = 0; tries < 5; tries++) {
-        uint8_t user_ctrl = _register_read(MPUREG_USER_CTRL);
+        _last_stat_user_ctrl = _register_read(MPUREG_USER_CTRL);
 
         /* First disable the master I2C to avoid hanging the slaves on the
          * aulixiliar I2C bus - it will be enabled again if the AuxiliaryBus
          * is used */
-        if (user_ctrl & BIT_USER_CTRL_I2C_MST_EN) {
-            _register_write(MPUREG_USER_CTRL, user_ctrl & ~BIT_USER_CTRL_I2C_MST_EN);
+        if (_last_stat_user_ctrl & BIT_USER_CTRL_I2C_MST_EN) {
+            _last_stat_user_ctrl &= ~BIT_USER_CTRL_I2C_MST_EN;
+            _register_write(MPUREG_USER_CTRL, _last_stat_user_ctrl);
             hal.scheduler->delay(10);
         }
 
@@ -484,10 +691,11 @@ bool AP_InertialSensor_MPU9250::_hardware_init(void)
         hal.scheduler->delay(100);
 
         /* bus-dependent initialization */
-        if (_dev->bus_type == AP_HAL::Device::BUS_TYPE_SPI) {
+        if (_dev->bus_type() == AP_HAL::Device::BUS_TYPE_SPI) {
             /* Disable I2C bus if SPI selected (Recommended in Datasheet to be
              * done just after the device is reset) */
-            _register_write(MPUREG_USER_CTRL, BIT_USER_CTRL_I2C_IF_DIS);
+            _last_stat_user_ctrl |= BIT_USER_CTRL_I2C_IF_DIS;
+            _register_write(MPUREG_USER_CTRL, _last_stat_user_ctrl);
         }
 
         // Wake up device and select GyroZ clock. Note that the
@@ -505,10 +713,6 @@ bool AP_InertialSensor_MPU9250::_hardware_init(void)
         if (_data_ready()) {
             break;
         }
-
-#if MPU9250_DEBUG
-        _dump_registers();
-#endif
     }
     if (tries == 5) {
         hal.console->println("Failed to boot MPU9250 5 times");
@@ -526,22 +730,6 @@ fail_whoami:
     _dev->set_speed(AP_HAL::Device::SPEED_HIGH);
     return false;
 }
-
-#if MPU9250_DEBUG
-// dump all config registers - used for debug
-void AP_InertialSensor_MPU9250::_dump_registers(AP_MPU9250_BusDriver *bus)
-{
-    hal.console->println("MPU9250 registers");
-    for (uint8_t reg=0; reg<=126; reg++) {
-        uint8_t v = _register_read(bus, reg);
-        hal.console->printf("%02x:%02x ", (unsigned)reg, (unsigned)v);
-        if ((reg - (MPUREG_PRODUCT_ID-1)) % 16 == 0) {
-            hal.console->println();
-        }
-    }
-    hal.console->println();
-}
-#endif
 
 AP_MPU9250_AuxiliaryBusSlave::AP_MPU9250_AuxiliaryBusSlave(AuxiliaryBus &bus, uint8_t addr,
                                                            uint8_t instance)
@@ -643,8 +831,8 @@ int AP_MPU9250_AuxiliaryBusSlave::read(uint8_t *buf)
 
 /* MPU9250 provides up to 5 slave devices, but the 5th is way too different to
  * configure and is seldom used */
-AP_MPU9250_AuxiliaryBus::AP_MPU9250_AuxiliaryBus(AP_InertialSensor_MPU9250 &backend)
-    : AuxiliaryBus(backend, 4)
+AP_MPU9250_AuxiliaryBus::AP_MPU9250_AuxiliaryBus(AP_InertialSensor_MPU9250 &backend, uint32_t devid)
+    : AuxiliaryBus(backend, 4, devid)
 {
 }
 
@@ -667,8 +855,10 @@ void AP_MPU9250_AuxiliaryBus::_configure_slaves()
     auto &backend = AP_InertialSensor_MPU9250::from(_ins_backend);
 
     /* Enable the I2C master to slaves on the auxiliary I2C bus*/
-    uint8_t user_ctrl = backend._register_read(MPUREG_USER_CTRL);
-    backend._register_write(MPUREG_USER_CTRL, user_ctrl | BIT_USER_CTRL_I2C_MST_EN);
+    if (!(backend._last_stat_user_ctrl & BIT_USER_CTRL_I2C_MST_EN)) {
+        backend._last_stat_user_ctrl |= BIT_USER_CTRL_I2C_MST_EN;
+        backend._register_write(MPUREG_USER_CTRL, backend._last_stat_user_ctrl);
+    }
 
     /* stop condition between reads; clock at 400kHz */
     backend._register_write(MPUREG_I2C_MST_CTRL,
@@ -699,4 +889,4 @@ int AP_MPU9250_AuxiliaryBus::_configure_periodic_read(AuxiliaryBusSlave *slave,
 
     return 0;
 }
-#endif
+

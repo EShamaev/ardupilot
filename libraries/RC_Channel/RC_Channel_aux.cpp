@@ -1,5 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include "RC_Channel_aux.h"
 
 #include <AP_Math/AP_Math.h>
@@ -12,7 +10,7 @@ const AP_Param::GroupInfo RC_Channel_aux::var_info[] = {
     // @Param: FUNCTION
     // @DisplayName: Servo out function
     // @Description: Setting this to Disabled(0) will setup this output for control by auto missions or MAVLink servo set commands. any other value will enable the corresponding function
-    // @Values: 0:Disabled,1:RCPassThru,2:Flap,3:Flap_auto,4:Aileron,6:mount_pan,7:mount_tilt,8:mount_roll,9:mount_open,10:camera_trigger,11:release,12:mount2_pan,13:mount2_tilt,14:mount2_roll,15:mount2_open,16:DifferentialSpoiler1,17:DifferentialSpoiler2,18:AileronWithInput,19:Elevator,20:ElevatorWithInput,21:Rudder,24:Flaperon1,25:Flaperon2,26:GroundSteering,27:Parachute,28:EPM,29:LandingGear,30:EngineRunEnable,31:HeliRSC,32:HeliTailRSC,33:Motor1,34:Motor2,35:Motor3,36:Motor4,37:Motor5,38:Motor6,39:Motor7,40:Motor8,51:RCIN1,52:RCIN2,53:RCIN3,54:RCIN4,55:RCIN5,56:RCIN6,57:RCIN7,58:RCIN8,59:RCIN9,60:RCIN10,61:RCIN11,62:RCIN12,63:RCIN13,64:RCIN14,65:RCIN15,66:RCIN16,67:Ignition,68:Choke,69:Starter,70:Throttle
+    // @Values: 0:Disabled,1:RCPassThru,2:Flap,3:Flap_auto,4:Aileron,6:mount_pan,7:mount_tilt,8:mount_roll,9:mount_open,10:camera_trigger,11:release,12:mount2_pan,13:mount2_tilt,14:mount2_roll,15:mount2_open,16:DifferentialSpoiler1,17:DifferentialSpoiler2,18:AileronWithInput,19:Elevator,20:ElevatorWithInput,21:Rudder,24:Flaperon1,25:Flaperon2,26:GroundSteering,27:Parachute,28:Gripper,29:LandingGear,30:EngineRunEnable,31:HeliRSC,32:HeliTailRSC,33:Motor1,34:Motor2,35:Motor3,36:Motor4,37:Motor5,38:Motor6,39:Motor7,40:Motor8,51:RCIN1,52:RCIN2,53:RCIN3,54:RCIN4,55:RCIN5,56:RCIN6,57:RCIN7,58:RCIN8,59:RCIN9,60:RCIN10,61:RCIN11,62:RCIN12,63:RCIN13,64:RCIN14,65:RCIN15,66:RCIN16,67:Ignition,68:Choke,69:Starter,70:Throttle
     // @User: Standard
     AP_GROUPINFO("FUNCTION",       1, RC_Channel_aux, function, 0),
 
@@ -22,6 +20,7 @@ const AP_Param::GroupInfo RC_Channel_aux::var_info[] = {
 RC_Channel_aux *RC_Channel_aux::_aux_channels[RC_AUX_MAX_CHANNELS];
 uint64_t RC_Channel_aux::_function_mask[2];
 bool RC_Channel_aux::_initialised;
+bool RC_Channel_aux::_disable_passthrough;
 
 void
 RC_Channel_aux::set_function_mask(uint8_t fn)
@@ -47,10 +46,18 @@ RC_Channel_aux::output_ch(void)
     case k_none:                // disabled
         return;
     case k_manual:              // manual
-        set_radio_out(get_radio_in());
+        if (_disable_passthrough) {
+            set_radio_out(get_radio_trim());
+        } else {
+            set_radio_out(get_radio_in());
+        }
         break;
     case k_rcin1 ... k_rcin16: // rc pass-thru
-        set_radio_out(hal.rcin->read(function-k_rcin1));
+        if (_disable_passthrough) {
+            set_radio_out(get_radio_trim());
+        } else {
+            set_radio_out(hal.rcin->read(function-k_rcin1));
+        }
         break;
     case k_motor1 ... k_motor8:
         // handled by AP_Motors::rc_write()
@@ -81,7 +88,7 @@ void RC_Channel_aux::disable_aux_channel(uint8_t channel)
 {
     for (uint8_t i = 0; i < RC_AUX_MAX_CHANNELS; i++) {
         if (_aux_channels[i] && _aux_channels[i]->_ch_out == channel) {
-            _aux_channels[i] = NULL;
+            _aux_channels[i] = nullptr;
         }
     }    
 }
@@ -158,7 +165,7 @@ void RC_Channel_aux::update_aux_servo_function(void)
 
     // set auxiliary ranges
     for (uint8_t i = 0; i < RC_AUX_MAX_CHANNELS; i++) {
-        if (_aux_channels[i] == NULL) continue;
+        if (_aux_channels[i] == nullptr) continue;
         _aux_channels[i]->aux_servo_function_setup();
 	}
     _initialised = true;
@@ -199,6 +206,24 @@ RC_Channel_aux::set_radio(RC_Channel_aux::Aux_servo_function_t function, int16_t
             _aux_channels[i]->output();
 		  }
     }
+}
+
+/*
+  get radio_out for *first* channel matching the given function type.
+  Returns true if a value was found.
+ */
+bool RC_Channel_aux::get_radio(RC_Channel_aux::Aux_servo_function_t function, int16_t &value)
+{
+    if (!function_assigned(function)) {
+        return false;
+    }
+    for (uint8_t i = 0; i < RC_AUX_MAX_CHANNELS; i++) {
+        if (_aux_channels[i] && _aux_channels[i]->function.get() == function) {
+            value = _aux_channels[i]->get_radio_out();
+            return true;
+        }
+    }
+    return false;
 }
 
 /*

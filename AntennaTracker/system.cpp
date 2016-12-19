@@ -1,5 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include "Tracker.h"
 #include "version.h"
 
@@ -30,6 +28,8 @@ void Tracker::init_tracker()
 
     GCS_MAVLINK::set_dataflash(&DataFlash);
 
+    mavlink_system.sysid = g.sysid_this_mav;
+
     // initialise serial ports
     serial_manager.init();
 
@@ -56,8 +56,6 @@ void Tracker::init_tracker()
         gcs[i].set_snoop(mavlink_snoop_static);
     }
 
-    mavlink_system.sysid = g.sysid_this_mav;
-
 #if LOGGING_ENABLED == ENABLED
     log_init();
 #endif
@@ -72,7 +70,7 @@ void Tracker::init_tracker()
     }
 
     // GPS Initialization
-    gps.init(NULL, serial_manager);
+    gps.init(nullptr, serial_manager);
 
     ahrs.init();
     ahrs.set_fly_forward(false);
@@ -189,7 +187,7 @@ void Tracker::prepare_servos()
 
 void Tracker::set_mode(enum ControlMode mode)
 {
-    if(control_mode == mode) {
+    if (control_mode == mode) {
         // don't switch modes if we are already in the correct mode.
         return;
     }

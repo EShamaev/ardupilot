@@ -3,7 +3,7 @@
  APM automatic test suite
  Andrew Tridgell, October 2011
 """
-
+from __future__ import print_function
 import atexit
 import fnmatch
 import glob
@@ -38,7 +38,7 @@ def get_default_params(atype, binary):
         frame = "+"
 
     home = "%f,%f,%u,%u" % (HOME.lat, HOME.lng, HOME.alt, HOME.heading)
-    sitl = util.start_SITL(binary, wipe=True, model=frame, home=home, speedup=10)
+    sitl = util.start_SITL(binary, wipe=True, model=frame, home=home, speedup=10, unhide_parameters=True)
     mavproxy = util.start_MAVProxy_SITL(atype)
     print("Dumping defaults")
     idx = mavproxy.expect(['Please Run Setup', 'Saved [0-9]+ parameters to (\S+)'])
@@ -499,9 +499,10 @@ def run_tests(steps):
 
 util.mkdir_p(util.reltopdir('../buildlogs'))
 
-lck = util.lock_file(util.reltopdir('../buildlogs/autotest.lck'))
+lckfile = util.reltopdir('../buildlogs/autotest.lck')
+lck = util.lock_file(lckfile)
 if lck is None:
-    print("autotest is locked - exiting")
+    print("autotest is locked - exiting.  lckfile=(%s)" % (lckfile,))
     sys.exit(0)
 
 atexit.register(util.pexpect_close_all)

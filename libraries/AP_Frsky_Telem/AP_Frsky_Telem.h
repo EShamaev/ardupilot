@@ -1,4 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 /*
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -21,8 +20,9 @@
 #include <AP_Notify/AP_Notify.h>
 #include <AP_RangeFinder/AP_RangeFinder.h>
 #include <AP_SerialManager/AP_SerialManager.h>
+#include <AP_HAL/utility/RingBuffer.h>
 
-#define MSG_BUFFER_LENGTH           5 // size of the message buffer queue (number of messages waiting to be sent)
+#define FRSKY_TELEM_PAYLOAD_STATUS_CAPACITY          5 // size of the message buffer queue (max number of messages waiting to be sent)
 
 /* 
 for FrSky D protocol (D-receivers)
@@ -61,9 +61,6 @@ for FrSky SPort and SPort Passthrough (OpenTX) protocols (X-receivers)
 #define SENSOR_ID_28                0x1B // Sensor ID 28
 
 // FrSky data IDs
-#define ALT_FIRST_ID                0x0100
-#define VARIO_FIRST_ID              0x0110
-#define VFAS_FIRST_ID               0x0210
 #define GPS_LONG_LATI_FIRST_ID      0x0800
 #define DIY_FIRST_ID                0x5000
 
@@ -90,7 +87,8 @@ for FrSky SPort Passthrough
 #define AP_CONTROL_MODE_LIMIT       0x1F
 #define AP_SSIMPLE_FLAGS            0x6
 #define AP_SSIMPLE_OFFSET           4
-#define AP_ISFLYING_FLAG            0x80
+#define AP_LANDCOMPLETE_FLAG        0x80
+#define AP_INITIALIZED_FLAG         0x2000
 #define AP_ARMED_OFFSET             8
 #define AP_BATT_FS_OFFSET           9
 #define AP_EKF_FS_OFFSET            10
@@ -117,30 +115,26 @@ public:
     AP_Frsky_Telem(AP_AHRS &ahrs, const AP_BattMonitor &battery, const RangeFinder &rng);
 
     // init - perform required initialisation
-    void init(const AP_SerialManager &serial_manager, const char *firmware_str, const uint8_t mav_type, AP_Float *fs_batt_voltage, AP_Float *fs_batt_mah, uint32_t *ap_value);
-    void init(const AP_SerialManager &serial_manager);
+    void init(const AP_SerialManager &serial_manager, const char *firmware_str, const uint8_t mav_type, const AP_Float *fs_batt_voltage = nullptr, const AP_Float *fs_batt_mah = nullptr, const uint32_t *ap_valuep = nullptr);
 
-    // add statustext message to FrSky lib queue.
+    // add statustext message to FrSky lib message queue
     void queue_message(MAV_SEVERITY severity, const char *text);
 
     // update flight control mode. The control mode is vehicle type specific
     void update_control_mode(uint8_t mode) { _ap.control_mode = mode; }
 
+    // update whether we're flying (used for Plane)
+    // set land_complete flag to 0 if is_flying
+    // set land_complete flag to 1 if not flying
+    void set_is_flying(bool is_flying) { (is_flying) ? (_ap.value &= ~AP_LANDCOMPLETE_FLAG) : (_ap.value |= AP_LANDCOMPLETE_FLAG); }
+ 
     // update error mask of sensors and subsystems. The mask uses the
     // MAV_SYS_STATUS_* values from mavlink. If a bit is set then it
     // indicates that the sensor or subsystem is present but not
     // functioning correctly
-    void update_sensor_status_flags(uint32_t error_mask) { _ap.sensor_status_error_flags = error_mask; }
-    
-    struct msg_t
-    {
-        struct {
-            const char *text;
-            uint8_t severity;
-        } data[MSG_BUFFER_LENGTH];
-        uint8_t queued_idx;
-        uint8_t sent_idx;
-    };
+    void update_sensor_status_flags(uint32_t error_mask) { _ap.sensor_status_flags = error_mask; }
+
+    static ObjectArray<mavlink_statustext_t> _statustext_queue;
     
 private:
     AP_AHRS &_ahrs;
@@ -154,19 +148,20 @@ private:
     struct
     {
         uint8_t mav_type; // frame type (see MAV_TYPE in Mavlink definition file common.h)
-        AP_Float *fs_batt_voltage; // failsafe battery voltage in volts
-        AP_Float *fs_batt_mah; // failsafe reserve capacity in mAh
+        const AP_Float *fs_batt_voltage; // failsafe battery voltage in volts
+        const AP_Float *fs_batt_mah; // failsafe reserve capacity in mAh
     } _params;
     
     struct
     {
         uint8_t control_mode;
-        uint32_t *value;
-        uint32_t sensor_status_error_flags;
+        uint32_t value;
+        const uint32_t *valuep;
+        uint32_t sensor_status_flags;
     } _ap;
-    
-    float _relative_home_altitude; // altitude in centimeters above home
-    uint32_t _control_sensors_timer;
+
+    uint32_t check_sensor_status_timer;
+    uint32_t check_ekf_status_timer;
     uint8_t _paramID;
     
     struct
@@ -189,16 +184,13 @@ private:
         uint8_t new_byte;
         bool send_attiandrng;
         bool send_latitude;
-        uint32_t timer_params;
-        uint32_t timer_ap_status;
-        uint32_t timer_batt;
-        uint32_t timer_gps_status;
-        uint32_t timer_home;
-        uint32_t timer_velandyaw;
-        uint32_t timer_gps_latlng;
-        uint32_t timer_vario;
-        uint32_t timer_alt;
-        uint32_t timer_vfas;
+        uint32_t params_timer;
+        uint32_t ap_status_timer;
+        uint32_t batt_timer;
+        uint32_t gps_status_timer;
+        uint32_t home_timer;
+        uint32_t velandyaw_timer;
+        uint32_t gps_latlng_timer;
     } _passthrough;
     
     struct
@@ -218,12 +210,10 @@ private:
     
     struct
     {
-        uint32_t chunk; // a "chunk" (four characters/bytes) at a time of the mavlink message to be sent
+        uint32_t chunk; // a "chunk" (four characters/bytes) at a time of the queued message to be sent
         uint8_t repeats; // send each message "chunk" 3 times to make sure the entire messsage gets through without getting cut
         uint8_t char_index; // index of which character to get in the message
     } _msg_chunk;
-
-    msg_t _msg;
     
     // main transmission function when protocol is FrSky SPort Passthrough (OpenTX)
     void send_SPort_Passthrough(void);
@@ -242,8 +232,9 @@ private:
     void send_uint16(uint16_t id, uint16_t data);
 
     // methods to convert flight controller data to FrSky SPort Passthrough (OpenTX) format
-    uint32_t get_next_msg_chunk(void);
-    void control_sensors_check(void);
+    bool get_next_msg_chunk(void);
+    void check_sensor_status_flags(void);
+    void check_ekf_status(void);
     uint32_t calc_param(void);
     uint32_t calc_gps_latlng(bool *send_latitude);
     uint32_t calc_gps_status(void);

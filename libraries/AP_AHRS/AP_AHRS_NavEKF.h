@@ -1,4 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 #pragma once
 
 /*
@@ -126,6 +125,9 @@ public:
     const Vector3f &get_accel_ef(uint8_t i) const override;
     const Vector3f &get_accel_ef() const override;
 
+    // Retrieves the corrected NED delta velocity in use by the inertial navigation
+    void getCorrectedDeltaVelocityNED(Vector3f& ret, float& dt) const;
+
     // blended accelerometer values in the earth frame in m/s/s
     const Vector3f &get_accel_ef_blended(void) const;
 
@@ -153,7 +155,7 @@ public:
     bool get_vert_pos_rate(float &velocity);
 
     // write optical flow measurements to EKF
-    void writeOptFlowMeas(uint8_t &rawFlowQuality, Vector2f &rawFlowRates, Vector2f &rawGyroRates, uint32_t &msecFlowMeas);
+    void writeOptFlowMeas(uint8_t &rawFlowQuality, Vector2f &rawFlowRates, Vector2f &rawGyroRates, uint32_t &msecFlowMeas, const Vector3f &posOffset);
 
     // inibit GPS usage
     uint8_t setInhibitGPS(void);
@@ -191,6 +193,10 @@ public:
     // returns the time of the last reset or 0 if no reset has ever occurred
     uint32_t getLastVelNorthEastReset(Vector2f &vel) const;
 
+    // return the amount of vertical position change due to the last reset in meters
+    // returns the time of the last reset or 0 if no reset has ever occurred
+    uint32_t getLastPosDownReset(float &posDelta) const;
+
     // Resets the baro so that it reads zero at the current height
     // Resets the EKF height to zero
     // Adjusts the EKf origin height so that the EKF height + origin height is the same as before
@@ -214,7 +220,7 @@ public:
     // indicates prefect consistency between the measurement and the EKF solution and a value of of 1 is the maximum
     // inconsistency that will be accpeted by the filter
     // boolean false is returned if variances are not available
-    bool get_variances(float &velVar, float &posVar, float &hgtVar, Vector3f &magVar, float &tasVar, Vector2f &offset) const;
+    bool get_variances(float &velVar, float &posVar, float &hgtVar, Vector3f &magVar, float &tasVar, Vector2f &offset) const override;
 
     // returns the expected NED magnetic field
     bool get_mag_field_NED(Vector3f& ret) const;

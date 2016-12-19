@@ -17,8 +17,6 @@ def build(bld):
             'AC_Sprayer',
             'AC_WPNav',
             'AP_Camera',
-            'AP_EPM',
-            'AP_Frsky_Telem',
             'AP_IRLock',
             'AP_InertialNav',
             'AP_LandingGear',
@@ -29,7 +27,11 @@ def build(bld):
             'AP_Relay',
             'AP_ServoRelayEvents',
             'AP_Avoidance',
-            'AP_AdvancedFailsafe'
+            'AP_AdvancedFailsafe',
+            'AP_Proximity',
+            'AP_Stats',
+            'AP_Gripper',
+            'AP_Beacon'
         ],
     )
 

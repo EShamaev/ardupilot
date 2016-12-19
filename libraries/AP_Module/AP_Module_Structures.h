@@ -1,4 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 /*
   this defines data structures for public module interfaces in
   ArduPilot. 
@@ -15,7 +14,7 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 
-#define AHRS_state_version 2
+#define AHRS_state_version 3
 #define gyro_sample_version 1
 #define accel_sample_version 2
 
@@ -92,6 +91,9 @@ struct AHRS_state {
     // gyro_sample for primary_gyro. It should be added to a gyro
     // sample to get the corrected gyro estimate
     float gyro_bias[3];
+
+    // north-east-down velocity m/s
+    float velocity_ned[3];
 };
 
 

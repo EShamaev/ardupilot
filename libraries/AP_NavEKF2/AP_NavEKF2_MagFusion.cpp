@@ -1,5 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include <AP_HAL/AP_HAL.h>
 
 #if HAL_CPU_CLASS >= HAL_CPU_CLASS_150
@@ -237,7 +235,7 @@ void NavEKF2_core::SelectMagFusion()
         } else {
             // if we are not doing aiding with earth relative observations (eg GPS) then the declination is
             // maintained by fusing declination as a synthesised observation
-            if (PV_AidingMode != AID_ABSOLUTE || (imuSampleTime_ms - lastPosPassTime_ms) > 4000) {
+            if (PV_AidingMode != AID_ABSOLUTE) {
                 FuseDeclination(0.34f);
             }
             // fuse the three magnetometer componenents sequentially

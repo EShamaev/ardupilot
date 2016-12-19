@@ -1,4 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 /*
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -119,6 +118,8 @@ void AP_Motors::rc_set_freq(uint32_t mask, uint16_t freq_hz)
         mask != 0) {
         // tell HAL to do immediate output
         hal.rcout->set_output_mode(AP_HAL::RCOutput::MODE_PWM_ONESHOT);
+    } else if (_pwm_type == PWM_TYPE_BRUSHED16kHz) {
+        hal.rcout->set_output_mode(AP_HAL::RCOutput::MODE_PWM_BRUSHED16KHZ);
     }
 }
 

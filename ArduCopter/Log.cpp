@@ -1,5 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include "Copter.h"
 #include "version.h"
 
@@ -26,10 +24,10 @@ MENU2(log_menu, "Log", log_menu_commands, FUNCTOR_BIND(&copter, &Copter::print_l
 
 bool Copter::print_log_menu(void)
 {
-    cliSerial->printf("logs enabled: ");
+    cliSerial->print("logs enabled: ");
 
     if (0 == g.log_bitmask) {
-        cliSerial->printf("none");
+        cliSerial->print("none");
     }else{
         // Macro to make the following code a bit easier on the eye.
         // Pass it the capitalised name of the log option, as defined
@@ -75,11 +73,11 @@ int8_t Copter::dump_log(uint8_t argc, const Menu::arg *argv)
         DataFlash.DumpPageInfo(cliSerial);
         return(-1);
     } else if (dump_log_num <= 0) {
-        cliSerial->printf("dumping all\n");
+        cliSerial->println("dumping all");
         Log_Read(0, 1, 0);
         return(-1);
     } else if ((argc != 2) || ((uint16_t)dump_log_num > DataFlash.get_num_logs())) {
-        cliSerial->printf("bad log number\n");
+        cliSerial->println("bad log number");
         return(-1);
     }
 
@@ -102,7 +100,7 @@ int8_t Copter::select_logs(uint8_t argc, const Menu::arg *argv)
     uint16_t bits;
 
     if (argc != 2) {
-        cliSerial->printf("missing log type\n");
+        cliSerial->println("missing log type");
         return(-1);
     }
 
@@ -380,9 +378,9 @@ void Copter::Log_Write_Attitude()
     DataFlash.Log_Write_Attitude(ahrs, targets);
 
  #if OPTFLOW == ENABLED
-    DataFlash.Log_Write_EKF(ahrs,optflow.enabled());
+    DataFlash.Log_Write_EKF2(ahrs,optflow.enabled());
  #else
-    DataFlash.Log_Write_EKF(ahrs,false);
+    DataFlash.Log_Write_EKF2(ahrs,false);
  #endif
     DataFlash.Log_Write_AHRS2(ahrs);
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
@@ -651,12 +649,11 @@ struct PACKED log_Precland {
     LOG_PACKET_HEADER;
     uint64_t time_us;
     uint8_t healthy;
-    float bf_angle_x;
-    float bf_angle_y;
-    float ef_angle_x;
-    float ef_angle_y;
+    uint8_t target_acquired;
     float pos_x;
     float pos_y;
+    float vel_x;
+    float vel_y;
 };
 
 // Write an optical flow packet
@@ -668,19 +665,20 @@ void Copter::Log_Write_Precland()
         return;
     }
 
-    const Vector2f &bf_angle = precland.last_bf_angle_to_target();
-    const Vector2f &ef_angle = precland.last_ef_angle_to_target();
-    const Vector3f &target_pos_ofs = precland.last_target_pos_offset();
+    Vector2f target_pos_rel = Vector2f(0.0f,0.0f);
+    Vector2f target_vel_rel = Vector2f(0.0f,0.0f);
+    precland.get_target_position_relative_cm(target_pos_rel);
+    precland.get_target_velocity_relative_cms(target_vel_rel);
+
     struct log_Precland pkt = {
         LOG_PACKET_HEADER_INIT(LOG_PRECLAND_MSG),
         time_us         : AP_HAL::micros64(),
         healthy         : precland.healthy(),
-        bf_angle_x      : degrees(bf_angle.x),
-        bf_angle_y      : degrees(bf_angle.y),
-        ef_angle_x      : degrees(ef_angle.x),
-        ef_angle_y      : degrees(ef_angle.y),
-        pos_x           : target_pos_ofs.x,
-        pos_y           : target_pos_ofs.y
+        target_acquired : precland.target_acquired(),
+        pos_x           : target_pos_rel.x,
+        pos_y           : target_pos_rel.y,
+        vel_x           : target_vel_rel.x,
+        vel_y           : target_vel_rel.y
     };
     DataFlash.WriteBlock(&pkt, sizeof(pkt));
  #endif     // PRECISION_LANDING == ENABLED
@@ -750,6 +748,108 @@ void Copter::Log_Write_Throw(ThrowModeStage stage, float velocity, float velocit
     DataFlash.WriteBlock(&pkt, sizeof(pkt));
 }
 
+// proximity sensor logging
+struct PACKED log_Proximity {
+    LOG_PACKET_HEADER;
+    uint64_t time_us;
+    uint8_t health;
+    float dist0;
+    float dist45;
+    float dist90;
+    float dist135;
+    float dist180;
+    float dist225;
+    float dist270;
+    float dist315;
+    float closest_angle;
+    float closest_dist;
+};
+
+// Write proximity sensor distances
+void Copter::Log_Write_Proximity()
+{
+#if PROXIMITY_ENABLED == ENABLED
+    // exit immediately if not enabled
+    if (g2.proximity.get_status() == AP_Proximity::Proximity_NotConnected) {
+        return;
+    }
+
+    float sector_distance[8] = {0,0,0,0,0,0,0,0};
+    g2.proximity.get_horizontal_distance(0, sector_distance[0]);
+    g2.proximity.get_horizontal_distance(45, sector_distance[1]);
+    g2.proximity.get_horizontal_distance(90, sector_distance[2]);
+    g2.proximity.get_horizontal_distance(135, sector_distance[3]);
+    g2.proximity.get_horizontal_distance(180, sector_distance[4]);
+    g2.proximity.get_horizontal_distance(225, sector_distance[5]);
+    g2.proximity.get_horizontal_distance(270, sector_distance[6]);
+    g2.proximity.get_horizontal_distance(315, sector_distance[7]);
+
+    float close_ang = 0.0f, close_dist = 0.0f;
+    g2.proximity.get_closest_object(close_ang, close_dist);
+
+    struct log_Proximity pkt = {
+        LOG_PACKET_HEADER_INIT(LOG_PROXIMITY_MSG),
+        time_us         : AP_HAL::micros64(),
+        health          : (uint8_t)g2.proximity.get_status(),
+        dist0           : sector_distance[0],
+        dist45          : sector_distance[1],
+        dist90          : sector_distance[2],
+        dist135         : sector_distance[3],
+        dist180         : sector_distance[4],
+        dist225         : sector_distance[5],
+        dist270         : sector_distance[6],
+        dist315         : sector_distance[7],
+        closest_angle   : close_ang,
+        closest_dist    : close_dist
+    };
+    DataFlash.WriteBlock(&pkt, sizeof(pkt));
+#endif
+}
+
+// beacon sensor logging
+struct PACKED log_Beacon {
+    LOG_PACKET_HEADER;
+    uint64_t time_us;
+    uint8_t health;
+    uint8_t count;
+    float dist0;
+    float dist1;
+    float dist2;
+    float dist3;
+    float posx;
+    float posy;
+    float posz;
+};
+
+// Write beacon position and distances
+void Copter::Log_Write_Beacon()
+{
+    // exit immediately if feature is disabled
+    if (!g2.beacon.enabled()) {
+        return;
+    }
+
+    // position
+    Vector3f pos;
+    float accuracy = 0.0f;
+    g2.beacon.get_vehicle_position_ned(pos, accuracy);
+
+    struct log_Beacon pkt = {
+        LOG_PACKET_HEADER_INIT(LOG_BEACON_MSG),
+        time_us         : AP_HAL::micros64(),
+        health          : (uint8_t)g2.beacon.healthy(),
+        count           : (uint8_t)g2.beacon.count(),
+        dist0           : g2.beacon.beacon_distance(0),
+        dist1           : g2.beacon.beacon_distance(1),
+        dist2           : g2.beacon.beacon_distance(2),
+        dist3           : g2.beacon.beacon_distance(3),
+        posx            : pos.x,
+        posy            : pos.y,
+        posz            : pos.z
+    };
+    DataFlash.WriteBlock(&pkt, sizeof(pkt));
+}
+
 const struct LogStructure Copter::log_structure[] = {
     LOG_COMMON_STRUCTURES,
 #if AUTOTUNE_ENABLED == ENABLED
@@ -787,11 +887,15 @@ const struct LogStructure Copter::log_structure[] = {
     { LOG_HELI_MSG, sizeof(log_Heli),
       "HELI",  "Qff",         "TimeUS,DRRPM,ERRPM" },
     { LOG_PRECLAND_MSG, sizeof(log_Precland),
-      "PL",    "QBffffff",    "TimeUS,Heal,bX,bY,eX,eY,pX,pY" },
+      "PL",    "QBBffff",    "TimeUS,Heal,TAcq,pX,pY,vX,vY" },
     { LOG_GUIDEDTARGET_MSG, sizeof(log_GuidedTarget),
       "GUID",  "QBffffff",    "TimeUS,Type,pX,pY,pZ,vX,vY,vZ" },
     { LOG_THROW_MSG, sizeof(log_Throw),
       "THRO",  "QBffffbbbb",  "TimeUS,Stage,Vel,VelZ,Acc,AccEfZ,Throw,AttOk,HgtOk,PosOk" },
+    { LOG_PROXIMITY_MSG, sizeof(log_Proximity),
+      "PRX",   "QBffffffffff","TimeUS,Health,D0,D45,D90,D135,D180,D225,D270,D315,CAng,CDist" },
+    { LOG_BEACON_MSG, sizeof(log_Beacon),
+      "BCN",   "QBBfffffff",  "TimeUS,Health,Cnt,D0,D1,D2,D3,PosX,PosY,PosZ" },
 };
 
 #if CLI_ENABLED == ENABLED
@@ -844,7 +948,6 @@ void Copter::log_init(void)
     DataFlash.Init(log_structure, ARRAY_SIZE(log_structure));
     if (!DataFlash.CardInserted()) {
         gcs_send_text(MAV_SEVERITY_WARNING, "No dataflash card inserted");
-        g.log_bitmask.set(0);
     } else if (DataFlash.NeedPrep()) {
         gcs_send_text(MAV_SEVERITY_INFO, "Preparing log system");
         DataFlash.Prep();

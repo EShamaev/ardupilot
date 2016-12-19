@@ -1,5 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include <AP_HAL/AP_HAL.h>
 
 #if HAL_CPU_CLASS >= HAL_CPU_CLASS_150
@@ -167,10 +165,12 @@ void NavEKF2_core::setAidingMode()
         // and IMU gyro bias estimates have stabilised
         bool filterIsStable = tiltAlignComplete && yawAlignComplete && checkGyroCalStatus();
         // If GPS usage has been prohiited then we use flow aiding provided optical flow data is present
-        // GPS aiding is the perferred option unless excluded by the user
-        if((frontend->_fusionModeGPS) != 3 && readyToUseGPS() && filterIsStable && !gpsInhibit) {
+        // GPS aiding is the preferred option unless excluded by the user
+        bool canUseGPS = ((frontend->_fusionModeGPS) != 3 && readyToUseGPS() && filterIsStable && !gpsInhibit);
+        bool canUseRangeBeacon = readyToUseRangeBeacon() && filterIsStable;
+        if(canUseGPS || canUseRangeBeacon) {
             PV_AidingMode = AID_ABSOLUTE;
-        } else if ((frontend->_fusionModeGPS == 3) && optFlowDataPresent()) {
+        } else if (optFlowDataPresent() && filterIsStable) {
             PV_AidingMode = AID_RELATIVE;
         }
     } else if (PV_AidingMode == AID_RELATIVE) {
@@ -178,43 +178,79 @@ void NavEKF2_core::setAidingMode()
          bool flowSensorTimeout = ((imuSampleTime_ms - flowValidMeaTime_ms) > 5000);
          // Check if the fusion has timed out (flow measurements have been rejected for too long)
          bool flowFusionTimeout = ((imuSampleTime_ms - prevFlowFuseTime_ms) > 5000);
-         if (flowSensorTimeout || flowFusionTimeout) {
+         // Enable switch to absolute position mode if GPS is available
+         // If GPS is not available and flow fusion has timed out, then fall-back to no-aiding
+         if((frontend->_fusionModeGPS) != 3 && readyToUseGPS() && !gpsInhibit) {
+             PV_AidingMode = AID_ABSOLUTE;
+         } else if (flowSensorTimeout || flowFusionTimeout) {
              PV_AidingMode = AID_NONE;
          }
      } else if (PV_AidingMode == AID_ABSOLUTE) {
-         // check if we can use opticalflow as a backup
-         bool optFlowBackupAvailable = (flowDataValid && !hgtTimeout);
+         // Find the minimum time without data required to trigger any check
+         uint16_t minTestTime_ms = MIN(frontend->tiltDriftTimeMax_ms, MIN(frontend->posRetryTimeNoVel_ms,frontend->posRetryTimeUseVel_ms));
 
-         // Set GPS time-out threshold depending on whether we have an airspeed sensor to constrain drift
-         uint16_t gpsRetryTimeout_ms = useAirspeed() ? frontend->gpsRetryTimeUseTAS_ms : frontend->gpsRetryTimeNoTAS_ms;
+         // Check if optical flow data is being used
+         bool optFlowUsed = (imuSampleTime_ms - prevFlowFuseTime_ms > minTestTime_ms);
 
-         // Set the time that copters will fly without a GPS lock before failing the GPS and switching to a non GPS mode
-         uint16_t gpsFailTimeout_ms = optFlowBackupAvailable ? frontend->gpsFailTimeWithFlow_ms : gpsRetryTimeout_ms;
+         // Check if airspeed data is being used
+         bool airSpdUsed = (imuSampleTime_ms - lastTasPassTime_ms > minTestTime_ms);
 
-         // If we haven't received GPS data for a while and we are using it for aiding, then declare the position and velocity data as being timed out
-         if (imuSampleTime_ms - lastTimeGpsReceived_ms > gpsFailTimeout_ms) {
+         // Check if range beacon data is being used
+         bool rngBcnUsed = (imuSampleTime_ms - lastRngBcnPassTime_ms > minTestTime_ms);
 
-             // Let other processes know that GPS is not available and that a timeout has occurred
+         // Check if GPS is being used
+         bool gpsPosUsed = (imuSampleTime_ms - lastPosPassTime_ms > minTestTime_ms);
+         bool gpsVelUsed = (imuSampleTime_ms - lastVelPassTime_ms > minTestTime_ms);
+
+         // Check if attitude drift has been constrained by a measurement source
+         bool attAiding = gpsPosUsed || gpsVelUsed || optFlowUsed || airSpdUsed || rngBcnUsed;
+
+         // check if velocity drift has been constrained by a measurement source
+         bool velAiding = gpsVelUsed || airSpdUsed || optFlowUsed;
+
+         // check if position drift has been constrained by a measurement source
+         bool posAiding = gpsPosUsed || rngBcnUsed;
+
+         // Check if the loss of attitude aiding has become critical
+         bool attAidLossCritical = false;
+         if (!attAiding) {
+             attAidLossCritical = (imuSampleTime_ms - prevFlowFuseTime_ms > frontend->tiltDriftTimeMax_ms) &&
+                    (imuSampleTime_ms - lastTasPassTime_ms > frontend->tiltDriftTimeMax_ms) &&
+                    (imuSampleTime_ms - lastRngBcnPassTime_ms > frontend->tiltDriftTimeMax_ms) &&
+                    (imuSampleTime_ms - lastPosPassTime_ms > frontend->tiltDriftTimeMax_ms) &&
+                    (imuSampleTime_ms - lastVelPassTime_ms > frontend->tiltDriftTimeMax_ms);
+         }
+
+         // Check if the loss of position accuracy has become critical
+         bool posAidLossCritical = false;
+         if (!posAiding ) {
+             uint16_t maxLossTime_ms;
+             if (!velAiding) {
+                 maxLossTime_ms = frontend->posRetryTimeNoVel_ms;
+             } else {
+                 maxLossTime_ms = frontend->posRetryTimeUseVel_ms;
+             }
+             posAidLossCritical = (imuSampleTime_ms - lastRngBcnPassTime_ms > maxLossTime_ms) &&
+                    (imuSampleTime_ms - lastPosPassTime_ms > maxLossTime_ms) &&
+                    (imuSampleTime_ms - lastVelPassTime_ms > maxLossTime_ms);
+         }
+
+         if (attAidLossCritical) {
+             // if the loss of attitude data is critical, then put the filter into a constant position mode
+             PV_AidingMode = AID_NONE;
              posTimeout = true;
              velTimeout = true;
+             rngBcnTimeout = true;
+             tasTimeout = true;
              gpsNotAvailable = true;
-
-             // If we are totally reliant on GPS for navigation, then we need to switch to a non-GPS mode of operation
-             // If we don't have airspeed or sideslip assumption or optical flow to constrain drift, then go into constant position mode.
-             // If we can do optical flow nav (valid flow data and height above ground estimate), then go into flow nav mode.
-             if (!useAirspeed() && !assume_zero_sideslip()) {
-                 if (optFlowBackupAvailable) {
-                     // attempt optical flow navigation
-                     PV_AidingMode = AID_RELATIVE;
-                 } else {
-                     // put the filter into constant position mode
-                     PV_AidingMode = AID_NONE;
-                 }
-             }
-         } else if (gpsInhibit) {
-             // put the filter into constant position mode in response to an exernal request
-             PV_AidingMode = AID_NONE;
+         } else if (posAidLossCritical) {
+             // if the loss of position is critical, declare all sources of position aiding as being timed out
+             posTimeout = true;
+             velTimeout = true;
+             rngBcnTimeout = true;
+             gpsNotAvailable = true;
          }
+
      }
 
     // check to see if we are starting or stopping aiding and set states and modes as required
@@ -247,16 +283,24 @@ void NavEKF2_core::setAidingMode()
             // Reset the last valid flow fusion time
             prevFlowFuseTime_ms = imuSampleTime_ms;
         } else if (PV_AidingMode == AID_ABSOLUTE) {
+            bool canUseGPS = ((frontend->_fusionModeGPS) != 3 && readyToUseGPS() && !gpsInhibit);
+            bool canUseRangeBeacon = readyToUseRangeBeacon();
             // We have commenced aiding and GPS usage is allowed
-            GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_INFO, "EKF2 IMU%u is using GPS",(unsigned)imu_index);
+            if (canUseGPS) {
+                GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_INFO, "EKF2 IMU%u is using GPS",(unsigned)imu_index);
+            }
             posTimeout = false;
             velTimeout = false;
-            // we need to reset the GPS timers to prevent GPS timeout logic being invoked on entry into GPS aiding
-            // this is because the EKF can be interrupted for an arbitrary amount of time during vehicle arming checks
-            lastTimeGpsReceived_ms = imuSampleTime_ms;
-            secondLastGpsTime_ms = imuSampleTime_ms;
-            // reset the last valid position fix time to prevent unwanted activation of GPS glitch logic
+            // We have commenced aiding and range beacon usage is allowed
+            if (canUseRangeBeacon) {
+                GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_INFO, "EKF2 IMU%u is using range beacons",(unsigned)imu_index);
+                GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_INFO, "EKF2 IMU%u initial pos NE = %3.1f,%3.1f (m)",(unsigned)imu_index,(double)receiverPos.x,(double)receiverPos.y);
+                GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_INFO, "EKF2 IMU%u initial beacon pos D offset = %3.1f (m)",(unsigned)imu_index,(double)bcnPosOffset);
+            }
+            // reset the last fusion accepted times to prevent unwanted activation of timeout logic
             lastPosPassTime_ms = imuSampleTime_ms;
+            lastVelPassTime_ms = imuSampleTime_ms;
+            lastRngBcnPassTime_ms = imuSampleTime_ms;
         }
 
         // Always reset the position and velocity when changing mode
@@ -317,6 +361,12 @@ bool NavEKF2_core::readyToUseGPS(void) const
     return validOrigin && tiltAlignComplete && yawAlignComplete && gpsGoodToAlign && (frontend->_fusionModeGPS != 3) && gpsDataToFuse;
 }
 
+// return true if the filter to be ready to use the beacon range measurements
+bool NavEKF2_core::readyToUseRangeBeacon(void) const
+{
+    return tiltAlignComplete && yawAlignComplete && rngBcnGoodToAlign && rngBcnDataToFuse;
+}
+
 // return true if we should use the compass
 bool NavEKF2_core::use_compass(void) const
 {
@@ -341,6 +391,8 @@ bool NavEKF2_core::setOriginLLH(struct Location &loc)
         return false;
     }
     EKF_origin = loc;
+    // define Earth rotation vector in the NED navigation frame at the origin
+    calcEarthRateNED(earthRateNED, _ahrs->get_home().lat);
     validOrigin = true;
     return true;
 }
@@ -353,7 +405,7 @@ void NavEKF2_core::setOrigin()
     // define Earth rotation vector in the NED navigation frame at the origin
     calcEarthRateNED(earthRateNED, _ahrs->get_home().lat);
     validOrigin = true;
-    GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_INFO, "EKF2 IMU%u Origin Set",(unsigned)imu_index);
+    GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_INFO, "EKF2 IMU%u Origin set to GPS",(unsigned)imu_index);
 }
 
 // record a yaw reset event
@@ -403,7 +455,7 @@ void  NavEKF2_core::updateFilterStatus(void)
     bool doingNormalGpsNav = !posTimeout && (PV_AidingMode == AID_ABSOLUTE);
     bool someVertRefData = (!velTimeout && useGpsVertVel) || !hgtTimeout;
     bool someHorizRefData = !(velTimeout && posTimeout && tasTimeout) || doingFlowNav;
-    bool optFlowNavPossible = flowDataValid && (frontend->_fusionModeGPS == 3) && delAngBiasLearned;
+    bool optFlowNavPossible = flowDataValid && delAngBiasLearned;
     bool gpsNavPossible = !gpsNotAvailable && gpsGoodToAlign && delAngBiasLearned;
     bool filterHealthy = healthy() && tiltAlignComplete && (yawAlignComplete || (!use_compass() && (PV_AidingMode == AID_NONE)));
     // If GPS height usage is specified, height is considered to be inaccurate until the GPS passes all checks

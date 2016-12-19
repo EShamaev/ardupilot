@@ -1,5 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include "Copter.h"
 
 // get_smoothing_gain - returns smoothing gain to be passed into attitude_control.input_euler_angle_roll_pitch_euler_rate_yaw
@@ -20,7 +18,7 @@ void Copter::get_pilot_desired_lean_angles(float roll_in, float pitch_in, float 
     angle_max = constrain_float(angle_max, 1000, aparm.angle_max);
 
     // scale roll_in, pitch_in to ANGLE_MAX parameter range
-    float scaler = aparm.angle_max/(float)ROLL_PITCH_INPUT_MAX;
+    float scaler = aparm.angle_max/(float)ROLL_PITCH_YAW_INPUT_MAX;
     roll_in *= scaler;
     pitch_in *= scaler;
 
@@ -45,20 +43,28 @@ void Copter::get_pilot_desired_lean_angles(float roll_in, float pitch_in, float 
 // returns desired yaw rate in centi-degrees per second
 float Copter::get_pilot_desired_yaw_rate(int16_t stick_angle)
 {
-    // convert pilot input to the desired yaw rate
-    return stick_angle * g.acro_yaw_p;
-}
+    float yaw_request;
 
-// check for ekf yaw reset and adjust target heading
-void Copter::check_ekf_yaw_reset()
-{
-    float yaw_angle_change_rad = 0.0f;
-    uint32_t new_ekfYawReset_ms = ahrs.getLastYawResetAngle(yaw_angle_change_rad);
-    if (new_ekfYawReset_ms != ekfYawReset_ms) {
-        attitude_control.shift_ef_yaw_target(ToDeg(yaw_angle_change_rad) * 100.0f);
-        ekfYawReset_ms = new_ekfYawReset_ms;
-        Log_Write_Event(DATA_EKF_YAW_RESET);
+    // calculate yaw rate request
+    if (g2.acro_y_expo <= 0) {
+        yaw_request = stick_angle * g.acro_yaw_p;
+    } else {
+        // expo variables
+        float y_in, y_in3, y_out;
+
+        // range check expo
+        if (g2.acro_y_expo > 1.0f || g2.acro_y_expo < 0.5f) {
+            g2.acro_y_expo = 1.0f;
+        }
+
+        // yaw expo
+        y_in = float(stick_angle)/ROLL_PITCH_YAW_INPUT_MAX;
+        y_in3 = y_in*y_in*y_in;
+        y_out = (g2.acro_y_expo * y_in3) + ((1.0f - g2.acro_y_expo) * y_in);
+        yaw_request = ROLL_PITCH_YAW_INPUT_MAX * y_out * g.acro_yaw_p;
     }
+    // convert pilot input to the desired yaw rate
+    return yaw_request;
 }
 
 /*************************************************************
@@ -133,15 +139,17 @@ void Copter::set_throttle_takeoff()
     pos_control.init_takeoff();
 }
 
-// get_pilot_desired_throttle - transform pilot's throttle input to make cruise throttle mid stick
+// transform pilot's manual throttle input to make hover throttle mid stick
 // used only for manual throttle modes
+// thr_mid should be in the range 0 to 1
 // returns throttle output 0 to 1
-float Copter::get_pilot_desired_throttle(int16_t throttle_control)
+float Copter::get_pilot_desired_throttle(int16_t throttle_control, float thr_mid)
 {
-    float throttle_out;
+    if (thr_mid <= 0.0f) {
+        thr_mid = motors.get_throttle_hover();
+    }
 
     int16_t mid_stick = channel_throttle->get_control_mid();
-
     // protect against unlikely divide by zero
     if (mid_stick <= 0) {
         mid_stick = 500;
@@ -150,21 +158,22 @@ float Copter::get_pilot_desired_throttle(int16_t throttle_control)
     // ensure reasonable throttle values
     throttle_control = constrain_int16(throttle_control,0,1000);
 
-    // ensure mid throttle is set within a reasonable range
-    float thr_mid = constrain_float(motors.get_throttle_hover(), 0.1f, 0.9f);
-
-    // check throttle is above, below or in the deadband
+    // calculate normalised throttle input
+    float throttle_in;
     if (throttle_control < mid_stick) {
         // below the deadband
-        throttle_out = ((float)throttle_control)*thr_mid/(float)mid_stick;
+        throttle_in = ((float)throttle_control)*0.5f/(float)mid_stick;
     }else if(throttle_control > mid_stick) {
         // above the deadband
-        throttle_out = (thr_mid) + ((float)(throttle_control-mid_stick)) * (1.0f - thr_mid) / (float)(1000-mid_stick);
+        throttle_in = 0.5f + ((float)(throttle_control-mid_stick)) * 0.5f / (float)(1000-mid_stick);
     }else{
         // must be in the deadband
-        throttle_out = thr_mid;
+        throttle_in = 0.5f;
     }
 
+    float expo = constrain_float(-(thr_mid-0.5)/0.375, -0.5f, 1.0f);
+    // calculate the output throttle using the given expo function
+    float throttle_out = throttle_in*(1.0f-expo) + expo*throttle_in*throttle_in*throttle_in;
     return throttle_out;
 }
 
@@ -235,9 +244,31 @@ float Copter::get_surface_tracking_climb_rate(int16_t target_rate, float current
         target_rangefinder_alt += target_rate * dt;
     }
 
-    // do not let target altitude get too far from current altitude above ground
-    // Note: the 750cm limit is perhaps too wide but is consistent with the regular althold limits and helps ensure a smooth transition
-    target_rangefinder_alt = constrain_float(target_rangefinder_alt,rangefinder_state.alt_cm-pos_control.get_leash_down_z(),rangefinder_state.alt_cm+pos_control.get_leash_up_z());
+    /*
+      handle rangefinder glitches. When we get a rangefinder reading
+      more than RANGEFINDER_GLITCH_ALT_CM different from the current
+      rangefinder reading then we consider it a glitch and reject
+      until we get RANGEFINDER_GLITCH_NUM_SAMPLES samples in a
+      row. When that happens we reset the target altitude to the new
+      reading
+     */
+    int32_t glitch_cm = rangefinder_state.alt_cm - target_rangefinder_alt;
+    if (glitch_cm >= RANGEFINDER_GLITCH_ALT_CM) {
+        rangefinder_state.glitch_count = MAX(rangefinder_state.glitch_count+1,1);
+    } else if (glitch_cm <= -RANGEFINDER_GLITCH_ALT_CM) {
+        rangefinder_state.glitch_count = MIN(rangefinder_state.glitch_count-1,-1);
+    } else {
+        rangefinder_state.glitch_count = 0;
+    }
+    if (abs(rangefinder_state.glitch_count) >= RANGEFINDER_GLITCH_NUM_SAMPLES) {
+        // shift to the new rangefinder reading
+        target_rangefinder_alt = rangefinder_state.alt_cm;
+        rangefinder_state.glitch_count = 0;
+    }
+    if (rangefinder_state.glitch_count != 0) {
+        // we are currently glitching, just use the target rate
+        return target_rate;
+    }
 
     // calc desired velocity correction from target rangefinder alt vs actual rangefinder alt (remove the error already passed to Altitude controller to avoid oscillations)
     distance_error = (target_rangefinder_alt - rangefinder_state.alt_cm) - (current_alt_target - current_alt);
@@ -252,8 +283,10 @@ float Copter::get_surface_tracking_climb_rate(int16_t target_rate, float current
 }
 
 // set_accel_throttle_I_from_pilot_throttle - smoothes transition from pilot controlled throttle to autopilot throttle
-void Copter::set_accel_throttle_I_from_pilot_throttle(float pilot_throttle)
+void Copter::set_accel_throttle_I_from_pilot_throttle()
 {
+    // get last throttle input sent to attitude controller
+    float pilot_throttle = constrain_float(attitude_control.get_throttle_in(), 0.0f, 1.0f);
     // shift difference between pilot's throttle and hover throttle into accelerometer I
     g.pid_accel_z.set_integrator((pilot_throttle-motors.get_throttle_hover()) * 1000.0f);
 }

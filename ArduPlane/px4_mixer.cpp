@@ -1,5 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include "Plane.h"
 
 /*
@@ -233,7 +231,7 @@ bool Plane::setup_failsafe_mixing(void)
 {
     const char *mixer_filename = "/fs/microsd/APM/MIXER.MIX";
     bool ret = false;
-    char *buf = NULL;
+    char *buf = nullptr;
     const uint16_t buf_size = 2048;
     uint16_t fileSize, new_crc;
     int px4io_fd = -1;
@@ -242,13 +240,13 @@ bool Plane::setup_failsafe_mixing(void)
     unsigned mixer_status = 0;
 
     buf = (char *)malloc(buf_size);
-    if (buf == NULL) {
+    if (buf == nullptr) {
         goto failed;
     }
 
     fileSize = create_mixer(buf, buf_size, mixer_filename);
     if (!fileSize) {
-        hal.console->printf("Unable to create mixer\n");
+        hal.console->println("Unable to create mixer");
         goto failed;
     }
 
@@ -282,13 +280,13 @@ bool Plane::setup_failsafe_mixing(void)
     /* reset any existing mixer in px4io. This shouldn't be needed,
      * but is good practice */
     if (ioctl(px4io_fd, MIXERIOCRESET, 0) != 0) {
-        hal.console->printf("Unable to reset mixer\n");
+        hal.console->println("Unable to reset mixer");
         goto failed;
     }
 
 	/* pass the buffer to the device */
     if (ioctl(px4io_fd, MIXERIOCLOADBUF, (unsigned long)buf) != 0) {
-        hal.console->printf("Unable to send mixer to IO\n");
+        hal.console->println("Unable to send mixer to IO");
         goto failed;        
     }
 
@@ -297,7 +295,7 @@ bool Plane::setup_failsafe_mixing(void)
     // a RC config limitation in px4io.c limiting to PX4IO_RC_MAPPED_CONTROL_CHANNELS
     for (uint8_t i=0; i<8; i++) {
         RC_Channel *ch = RC_Channel::rc_channel(i);
-        if (ch == NULL) {
+        if (ch == nullptr) {
             continue;
         }
         struct pwm_output_rc_config config;
@@ -350,7 +348,7 @@ bool Plane::setup_failsafe_mixing(void)
         }
 
         if (ioctl(px4io_fd, PWM_SERVO_SET_RC_CONFIG, (unsigned long)&config) != 0) {
-            hal.console->printf("SET_RC_CONFIG failed\n");
+            hal.console->println("SET_RC_CONFIG failed");
             goto failed;
         }
     }
@@ -364,7 +362,7 @@ bool Plane::setup_failsafe_mixing(void)
         }
     }
     if (ioctl(px4io_fd, PWM_SERVO_SET_MIN_PWM, (long unsigned int)&pwm_values) != 0) {
-        hal.console->printf("SET_MIN_PWM failed\n");
+        hal.console->println("SET_MIN_PWM failed");
         goto failed;
     }
 
@@ -378,16 +376,16 @@ bool Plane::setup_failsafe_mixing(void)
         }
     }
     if (ioctl(px4io_fd, PWM_SERVO_SET_MAX_PWM, (long unsigned int)&pwm_values) != 0) {
-        hal.console->printf("SET_MAX_PWM failed\n");
+        hal.console->println("SET_MAX_PWM failed");
         goto failed;
     }
     if (ioctl(px4io_fd, PWM_SERVO_SET_OVERRIDE_OK, 0) != 0) {
-        hal.console->printf("SET_OVERRIDE_OK failed\n");
+        hal.console->println("SET_OVERRIDE_OK failed");
         goto failed;
     }
 
     if (ioctl(px4io_fd, PWM_SERVO_SET_OVERRIDE_IMMEDIATE, 1) != 0) {
-        hal.console->printf("SET_OVERRIDE_IMMEDIATE failed\n");
+        hal.console->println("SET_OVERRIDE_IMMEDIATE failed");
         goto failed;
     }
 
@@ -400,7 +398,7 @@ bool Plane::setup_failsafe_mixing(void)
     ret = true;
 
 failed:
-    if (buf != NULL) {
+    if (buf != nullptr) {
         free(buf);
     }
     if (px4io_fd != -1) {

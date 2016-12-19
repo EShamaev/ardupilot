@@ -1,4 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 #pragma once
 
 /// @file    AC_AttitudeControl.h
@@ -143,6 +142,8 @@ public:
 
     // Return 321-intrinsic euler angles in centidegrees representing the rotation from NED earth frame to the
     // attitude controller's target attitude.
+    // **NOTE** Using vector3f*deg(100) is more efficient than deg(vector3f)*100 or deg(vector3d*100) because it gives the
+    // same result with the fewest multiplcations. Even though it may look like a bug, it is intentional. See issue 4895.
     Vector3f get_att_target_euler_cd() const { return _attitude_target_euler_angle*degrees(100.0f); }
 
     // Return the angle between the target thrust vector and the current thrust vector.

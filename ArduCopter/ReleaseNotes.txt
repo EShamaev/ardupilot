@@ -1,5 +1,74 @@
 APM:Copter Release Notes:
 ------------------------------------------------------------------
+Copter 3.4.3 08-Dec-2016 / Copter 3.4.3-rc1 01-Dec-2016
+Changes from 3.4.2
+1) Bug Fixes:
+    a) reduce unnecessary EKF core switching and fix position reset
+    b) attitude control does not limit rate if ATC_ACCEL_MAX is zero
+    c) ignore arm command from GCS if already armed
+    d) set land-complete to false during auto takeoff 
+    e) onboard compass calibration memory init fix that could lead to failure to complete
+2) Minor Improvements:
+    a) LeddarOne driver robustness improvements
+    b) allow MOT_THR_MIX_MAX to be as high as 2.0
+    c) uavcan bus settle time increased to 2sec
+    d) helicopters do not hold position during auto takeoff until rotor is at full speed
+------------------------------------------------------------------
+Copter 3.4.2 16-Nov-2016 / Copter 3.4.2-rc1/rc2 07-Nov-2016
+Changes from 3.4.1
+1) Minor Improvements:
+    a) ACRO_Y_EXPO applies to all flight modes (but is defaulted to zero)
+    b) Autotune timeout increased (helps with large copters)
+    c) AltHold filter applied to P (was previously only for D)
+    d) arming check for compass health (was previously only a pre-arm check)
+2) Bug Fixes:
+    a) compass calibration (onboard) fix to return completion status
+    b) LeddarOne driver busy-wait fix 
+    c) SBF GPS altitude and accuracy reporting fix 
+    d) MAV GPS uses existing configured baud rate instead of auto detecting 
+------------------------------------------------------------------
+Copter 3.4.1 01-Nov-2016
+Changes from 3.4.0
+1) Pixracer PPM RC input fix
+------------------------------------------------------------------
+Copter 3.4.0 31-Oct-2016
+Changes from 3.4.0-rc7
+1) Disabled LeddarOne driver (will be fixed in AC3.4.1 within a couple of weeks)
+------------------------------------------------------------------
+Copter 3.4.0-rc7 25-Oct-2016
+Changes from 3.4.0-rc6
+1) Bug fixes, minor improvements:
+    a) more DSM binding fixes for pixracer
+    b) allow non-motor channels to move before safety switch is pressed
+    c) fix Bebop motor order
+    d) fix MAVLink system id for first few messages
+    e) fix throw mode throttle while rotating to level
+------------------------------------------------------------------
+Copter 3.4.0-rc6 15-Oct-2016
+Changes from 3.4.0-rc5
+1) Object Avoidance with SF40c 360 lidar
+2) ACRO_Y_EXPO parameter allows exponential yaw in ACRO mode (slow yaw at mid stick but fast response at full stick)
+3) ACRO_THR_MID parameter allows custom mid throttle for ACRO mode
+4) Precision Landing reliability and accuracy improvements using mini EKF and adding IRLock lens distortion correction 
+5) Bug fixes, minor improvements:
+    a) fix DSM binding on Pixracer
+    b) resolved position jump caused by EKF core change (also added logging and reporting to GCS)
+    c) EKF failsafe while in LAND triggers non-GPS LAND
+    d) small throttle jump removed when switching between AltHold, Loiter
+6) Safety:
+    a) EKF falls back to optical flow if GPS fails
+    b) pre-arm check that GPS configuration has completed
+------------------------------------------------------------------
+Copter 3.4.0-rc5 14-Sep-2016
+Changes from 3.4.0-rc4
+1) Sprayer enabled by default
+2) Bug fixes, minor improvements:
+    a) EKF fix for yaw angle reset fix when switching between cores (AC3.4 runs multiple EKFs simultaneously)
+    b) EKF fixes when fusing range finder into height estimate
+    c) pixracer clone board IMU hardware issue work around
+    d) dataflash time-going-backwards fix
+    e) fix rate PID conversion (AC3.3->AC3.4) for single, coax and tricopters
+------------------------------------------------------------------
 Copter 3.4.0-rc4 06-Sep-2016
 Changes from 3.4.0-rc3
 1) Intel Aero flight controller support

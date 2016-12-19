@@ -1,4 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 #pragma once
 
 #include <stdint.h>
@@ -16,9 +15,6 @@
 #include "AP_InertialSensor_Backend.h"
 #include "AuxiliaryBus.h"
 
-// enable debug to see a register dump on startup
-#define MPU6000_DEBUG 0
-
 class AP_MPU6000_AuxiliaryBus;
 class AP_MPU6000_AuxiliaryBusSlave;
 
@@ -35,13 +31,16 @@ public:
     }
 
     static AP_InertialSensor_Backend *probe(AP_InertialSensor &imu,
-                                            AP_HAL::OwnPtr<AP_HAL::I2CDevice> dev);
+                                            AP_HAL::OwnPtr<AP_HAL::I2CDevice> dev,
+                                            enum Rotation rotation = ROTATION_NONE);
 
     static AP_InertialSensor_Backend *probe(AP_InertialSensor &imu,
-                                            AP_HAL::OwnPtr<AP_HAL::SPIDevice> dev);
+                                            AP_HAL::OwnPtr<AP_HAL::SPIDevice> dev,
+                                            enum Rotation rotation = ROTATION_NONE);
 
     /* update accel and gyro state */
-    bool update();
+    bool update() override;
+    void accumulate() override;
 
     /*
      * Return an AuxiliaryBus if the bus driver allows it
@@ -53,55 +52,78 @@ public:
 private:
     AP_InertialSensor_MPU6000(AP_InertialSensor &imu,
                               AP_HAL::OwnPtr<AP_HAL::Device> dev,
-                              bool use_fifo);
-
-#if MPU6000_DEBUG
-    void _dump_registers();
-#endif
+                              enum Rotation rotation);
 
     /* Initialize sensor*/
     bool _init();
     bool _hardware_init();
+    bool _check_whoami();
 
-    void _set_filter_register(uint16_t filter_hz);
+    void _set_filter_register(void);
     void _fifo_reset();
-    void _fifo_enable();
     bool _has_auxiliary_bus();
 
     /* Read samples from FIFO (FIFO enabled) */
     void _read_fifo();
 
-    /* Read a single sample (FIFO disabled) */
-    void _read_sample();
-
     /* Check if there's data available by either reading DRDY pin or register */
     bool _data_ready();
 
     /* Poll for new data (non-blocking) */
-    void _poll_data();
+    bool _poll_data();
 
     /* Read and write functions taking the differences between buses into
      * account */
     bool _block_read(uint8_t reg, uint8_t *buf, uint32_t size);
     uint8_t _register_read(uint8_t reg);
-    void _register_write(uint8_t reg, uint8_t val );
+    void _register_write(uint8_t reg, uint8_t val, bool checked=false);
 
-    void _accumulate(uint8_t *samples, uint8_t n_samples);
+    bool _accumulate(uint8_t *samples, uint8_t n_samples);
+    bool _accumulate_fast_sampling(uint8_t *samples, uint8_t n_samples);
 
+    bool _check_raw_temp(int16_t t2);
+
+    int16_t _raw_temp;
+    
     // instance numbers of accel and gyro data
     uint8_t _gyro_instance;
     uint8_t _accel_instance;
 
-    const bool _use_fifo;
-
     uint16_t _error_count;
 
     float _temp_filtered;
+    float _accel_scale;
     LowPassFilter2pFloat _temp_filter;
+
+    enum Rotation _rotation;
 
     AP_HAL::DigitalSource *_drdy_pin;
     AP_HAL::OwnPtr<AP_HAL::Device> _dev;
     AP_MPU6000_AuxiliaryBus *_auxiliary_bus;
+
+    // is this an ICM-20608?
+    bool _is_icm_device;
+
+    // are we doing more than 1kHz sampling?
+    bool _fast_sampling;
+
+    // Last status from register user control
+    uint8_t _last_stat_user_ctrl;    
+
+    // buffer for fifo read
+    uint8_t *_fifo_buffer;
+
+    /*
+      accumulators for fast sampling
+      See description in _accumulate_fast_sampling()
+    */
+    struct {
+        Vector3f accel;
+        Vector3f gyro;
+        uint8_t count;
+        LowPassFilterVector3f accel_filter{4000, 188};
+        LowPassFilterVector3f gyro_filter{8000, 188};
+    } _accum;
 };
 
 class AP_MPU6000_AuxiliaryBusSlave : public AuxiliaryBusSlave
@@ -135,7 +157,7 @@ public:
     AP_HAL::Semaphore *get_semaphore() override;
 
 protected:
-    AP_MPU6000_AuxiliaryBus(AP_InertialSensor_MPU6000 &backend);
+    AP_MPU6000_AuxiliaryBus(AP_InertialSensor_MPU6000 &backend, uint32_t devid);
 
     AuxiliaryBusSlave *_instantiate_slave(uint8_t addr, uint8_t instance) override;
     int _configure_periodic_read(AuxiliaryBusSlave *slave, uint8_t reg,

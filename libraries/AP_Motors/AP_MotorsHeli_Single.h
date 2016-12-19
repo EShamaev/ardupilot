@@ -1,5 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 /// @file	AP_MotorsHeli_Single.h
 /// @brief	Motor control class for traditional heli
 #pragma once
@@ -57,7 +55,6 @@ public:
     };
 
     // set update rate to motors - a value in hertz
-    // you must have setup_motors before calling this
     void set_update_rate(uint16_t speed_hz);
 
     // enable - starts allowing signals to be sent to motors and servos

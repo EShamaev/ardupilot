@@ -1,5 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 /*
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -76,7 +74,6 @@ Copter::Copter(void) :
     pos_control(ahrs, inertial_nav, motors, attitude_control,
                 g.p_alt_hold, g.p_vel_z, g.pid_accel_z,
                 g.p_pos_xy, g.pi_vel_xy),
-    avoid(ahrs, inertial_nav, fence),
     wp_nav(inertial_nav, ahrs, pos_control, attitude_control),
     circle_nav(inertial_nav, ahrs, pos_control),
     pmTest1(0),
@@ -94,6 +91,7 @@ Copter::Copter(void) :
 #if AC_FENCE == ENABLED
     fence(ahrs, inertial_nav),
 #endif
+    avoid(ahrs, inertial_nav, fence, g2.proximity),
 #if AC_RALLY == ENABLED
     rally(ahrs),
 #endif

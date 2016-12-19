@@ -1,4 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 /*
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -108,7 +107,7 @@ const AP_Param::GroupInfo AP_ADSB::var_info[] = {
     // @Description: Transceiver RF selection for Rx enable and/or Tx enable.
     // @Values: 0:Disabled,1:Rx-Only,2:Tx-Only,3:Rx and Tx Enabled
     // @User: Advanced
-    AP_GROUPINFO("RF_SELECT",   9, AP_ADSB, out_state.cfg.rfSelect, UAVIONIX_ADSB_OUT_RF_SELECT_RX_ENABLED | UAVIONIX_ADSB_OUT_RF_SELECT_TX_ENABLED),
+    AP_GROUPINFO("RF_SELECT",   9, AP_ADSB, out_state.cfg.rfSelect, UAVIONIX_ADSB_OUT_RF_SELECT_RX_ENABLED),
 
 
 
@@ -640,15 +639,8 @@ void AP_ADSB::set_callsign(const char* str, const bool append_icao)
     } // for i
 
     if (append_icao) {
-        char str_icao[5];
-        sprintf(str_icao, "%04X", out_state.cfg.ICAO_id % 0x10000);
-        out_state.cfg.callsign[4] = str_icao[0];
-        out_state.cfg.callsign[5] = str_icao[1];
-        out_state.cfg.callsign[6] = str_icao[2];
-        out_state.cfg.callsign[7] = str_icao[3];
+        sprintf(&out_state.cfg.callsign[4], "%04X", out_state.cfg.ICAO_id % 0x10000);
     }
-
-    out_state.cfg.callsign[sizeof(out_state.cfg.callsign)-1] = 0; // always null terminate just to be sure
 }
 
 

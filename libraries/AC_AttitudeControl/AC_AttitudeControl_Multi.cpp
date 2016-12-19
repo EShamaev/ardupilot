@@ -1,5 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: t -*-
-
 #include "AC_AttitudeControl_Multi.h"
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Math/AP_Math.h>
@@ -44,6 +42,7 @@ const AP_Param::GroupInfo AC_AttitudeControl_Multi::var_info[] = {
     // @Range: 1 100
     // @Increment: 1
     // @Units: Hz
+    // @User: Standard
     AP_SUBGROUPINFO(_pid_rate_roll, "RAT_RLL_", 1, AC_AttitudeControl_Multi, AC_PID),
 
     // @Param: RAT_PIT_P
@@ -81,6 +80,7 @@ const AP_Param::GroupInfo AC_AttitudeControl_Multi::var_info[] = {
     // @Range: 1 100
     // @Increment: 1
     // @Units: Hz
+    // @User: Standard
     AP_SUBGROUPINFO(_pid_rate_pitch, "RAT_PIT_", 2, AC_AttitudeControl_Multi, AC_PID),
 
     // @Param: RAT_YAW_P
@@ -118,6 +118,7 @@ const AP_Param::GroupInfo AC_AttitudeControl_Multi::var_info[] = {
     // @Range: 1 100
     // @Increment: 1
     // @Units: Hz
+    // @User: Standard
     AP_SUBGROUPINFO(_pid_rate_yaw, "RAT_YAW_", 3, AC_AttitudeControl_Multi, AC_PID),
 
     // @Param: THR_MIX_MIN
@@ -240,11 +241,9 @@ void AC_AttitudeControl_Multi::parameter_sanity_check()
     if (_thr_mix_min < 0.1f || _thr_mix_min > 0.25f) {
         _thr_mix_min = AC_ATTITUDE_CONTROL_MIN_DEFAULT;
     }
-    if (_thr_mix_max < 0.5f || _thr_mix_max > 0.9f) {
-        _thr_mix_max = AC_ATTITUDE_CONTROL_MAX_DEFAULT;
-    }
-    if (_thr_mix_min > _thr_mix_max) {
-        _thr_mix_min = AC_ATTITUDE_CONTROL_MIN_DEFAULT;
+    if (_thr_mix_max < 0.5f || _thr_mix_max > 2.0f) {
+        // parameter description recommends thr-mix-max be no higher than 0.9 but we allow up to 2.0
+        // which can be useful for very high powered copters with very low hover throttle
         _thr_mix_max = AC_ATTITUDE_CONTROL_MAX_DEFAULT;
     }
 }

@@ -1,4 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 #pragma once
 
 #include <AP_Common/AP_Common.h>
@@ -86,6 +85,7 @@ public:
         k_param_mission, // mission library
         k_param_NavEKF2_old, // deprecated
         k_param_NavEKF2,
+        k_param_g2, // 2nd block of parameters
 
         // 140: battery controls
         k_param_battery_monitoring = 140,   // deprecated, can be deleted
@@ -136,6 +136,7 @@ public:
         k_param_fs_throttle_enabled,
         k_param_fs_throttle_value,
         k_param_fs_gcs_enabled,
+        k_param_fs_crash_check,
 
         // obstacle control
         k_param_sonar_enabled = 190, // deprecated, can be removed
@@ -271,6 +272,7 @@ public:
     AP_Int8     fs_throttle_enabled;
     AP_Int16    fs_throttle_value;
 	AP_Int8	    fs_gcs_enabled;
+    AP_Int8     fs_crash_check;
 
     // obstacle control
     AP_Int16    sonar_trigger_cm;
@@ -320,5 +322,24 @@ public:
         pidSpeedThrottle    (0.7,             0.2,             0.2,             4000)
         {}
 };
+
+/*
+  2nd block of parameters, to avoid going past 256 top level keys
+ */
+class ParametersG2 {
+public:
+    ParametersG2(void) { AP_Param::setup_object_defaults(this, var_info); }
+
+    // var_info for holding Parameter information
+    static const struct AP_Param::GroupInfo var_info[];
+
+    // vehicle statistics
+    AP_Stats stats;
+
+    // whether to enforce acceptance of packets only from sysid_my_gcs
+    AP_Int8 sysid_enforce;
+
+};
+
 
 extern const AP_Param::Info var_info[];

@@ -1,4 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 /*
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -172,7 +171,7 @@ void AP_AHRS_NavEKF::update_EKF1(void)
                     accel.z -= abias2;
                 }
                 if (_ins.get_accel_health(i)) {
-                    _accel_ef_ekf[i] = _dcm_matrix * accel;
+                    _accel_ef_ekf[i] = _dcm_matrix * get_rotation_autopilot_body_to_vehicle_body() * accel;
                 }
             }
 
@@ -244,7 +243,7 @@ void AP_AHRS_NavEKF::update_EKF2(void)
                     accel.z -= abias;
                 }
                 if (_ins.get_accel_health(i)) {
-                    _accel_ef_ekf[i] = _dcm_matrix * accel;
+                    _accel_ef_ekf[i] = _dcm_matrix * get_rotation_autopilot_body_to_vehicle_body() * accel;
                 }
             }
             _accel_ef_ekf_blended = _accel_ef_ekf[primary_imu>=0?primary_imu:_ins.get_primary_accel()];
@@ -1039,10 +1038,10 @@ bool AP_AHRS_NavEKF::get_filter_status(nav_filter_status &status) const
 }
 
 // write optical flow data to EKF
-void  AP_AHRS_NavEKF::writeOptFlowMeas(uint8_t &rawFlowQuality, Vector2f &rawFlowRates, Vector2f &rawGyroRates, uint32_t &msecFlowMeas)
+void  AP_AHRS_NavEKF::writeOptFlowMeas(uint8_t &rawFlowQuality, Vector2f &rawFlowRates, Vector2f &rawGyroRates, uint32_t &msecFlowMeas, const Vector3f &posOffset)
 {
-    EKF1.writeOptFlowMeas(rawFlowQuality, rawFlowRates, rawGyroRates, msecFlowMeas);
-    EKF2.writeOptFlowMeas(rawFlowQuality, rawFlowRates, rawGyroRates, msecFlowMeas);
+    EKF1.writeOptFlowMeas(rawFlowQuality, rawFlowRates, rawGyroRates, msecFlowMeas, posOffset);
+    EKF2.writeOptFlowMeas(rawFlowQuality, rawFlowRates, rawGyroRates, msecFlowMeas, posOffset);
 }
 
 // inhibit GPS usage
@@ -1109,6 +1108,24 @@ bool AP_AHRS_NavEKF::getMagOffsets(uint8_t mag_idx, Vector3f &magOffsets)
     }
 }
 
+// Retrieves the NED delta velocity corrected
+void AP_AHRS_NavEKF::getCorrectedDeltaVelocityNED(Vector3f& ret, float& dt) const
+{
+    if (ekf_type() == 2) {
+        uint8_t imu_idx = EKF2.getPrimaryCoreIMUIndex();
+        float accel_z_bias;
+        EKF2.getAccelZBias(-1,accel_z_bias);
+        ret.zero();
+        _ins.get_delta_velocity(imu_idx, ret);
+        dt = _ins.get_delta_velocity_dt(imu_idx);
+        ret.z -= accel_z_bias*dt;
+        ret = _dcm_matrix * get_rotation_autopilot_body_to_vehicle_body() * ret;
+        ret.z += GRAVITY_MSS*dt;
+    } else {
+        AP_AHRS::getCorrectedDeltaVelocityNED(ret, dt);
+    }
+}
+
 // report any reason for why the backend is refusing to initialise
 const char *AP_AHRS_NavEKF::prearm_failure_reason(void) const
 {
@@ -1166,6 +1183,24 @@ uint32_t AP_AHRS_NavEKF::getLastVelNorthEastReset(Vector2f &vel) const
         return EKF1.getLastVelNorthEastReset(vel);
     case 2:
         return EKF2.getLastVelNorthEastReset(vel);
+#if CONFIG_HAL_BOARD == HAL_BOARD_SITL
+    case EKF_TYPE_SITL:
+        return 0;
+#endif
+    }
+    return 0;
+}
+
+
+// return the amount of vertical position change due to the last reset in meters
+// returns the time of the last reset or 0 if no reset has ever occurred
+uint32_t AP_AHRS_NavEKF::getLastPosDownReset(float &posDelta) const
+{
+    switch (ekf_type()) {
+    case 1:
+        return 0;
+    case 2:
+        return EKF2.getLastPosDownReset(posDelta);
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
     case EKF_TYPE_SITL:
         return 0;

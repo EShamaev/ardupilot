@@ -1,5 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include "Copter.h"
 
 #if POSHOLD_ENABLED == ENABLED
@@ -77,6 +75,13 @@ static struct {
 // poshold_init - initialise PosHold controller
 bool Copter::poshold_init(bool ignore_checks)
 {
+#if FRAME_CONFIG == HELI_FRAME
+    // do not allow helis to enter Pos Hold if the Rotor Runup is not complete
+    if (!ignore_checks && !motors.rotor_runup_complete()){
+        return false;
+    }
+#endif
+
     // fail to initialise PosHold mode if no GPS lock
     if (!position_ok() && !ignore_checks) {
         return false;
@@ -87,8 +92,10 @@ bool Copter::poshold_init(bool ignore_checks)
     pos_control.set_accel_z(g.pilot_accel_z);
 
     // initialise position and desired velocity
-    pos_control.set_alt_target(inertial_nav.get_altitude());
-    pos_control.set_desired_velocity_z(inertial_nav.get_velocity_z());
+    if (!pos_control.is_active_z()) {
+        pos_control.set_alt_target_to_current_alt();
+        pos_control.set_desired_velocity_z(inertial_nav.get_velocity_z());
+    }
 
     // initialise lean angles to current attitude
     poshold.pilot_roll = 0;
@@ -165,7 +172,12 @@ void Copter::poshold_run()
         takeoff_get_climb_rates(target_climb_rate, takeoff_climb_rate);
 
         // check for take-off
+#if FRAME_CONFIG == HELI_FRAME
+        // helicopters are held on the ground until rotor speed runup has finished
+        if (ap.land_complete && (takeoff_state.running || (target_climb_rate > 0.0f && motors.rotor_runup_complete()))) {
+#else
         if (ap.land_complete && (takeoff_state.running || target_climb_rate > 0.0f)) {
+#endif
             if (!takeoff_state.running) {
                 takeoff_timer_start(constrain_float(g.pilot_takeoff_alt,0.0f,1000.0f));
             }

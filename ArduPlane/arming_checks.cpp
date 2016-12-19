@@ -1,4 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 /*
   additional arming checks for plane
  */
@@ -19,8 +18,21 @@ const AP_Param::GroupInfo AP_Arming_Plane::var_info[] = {
 };
 
 
+bool AP_Arming_Plane::arm(uint8_t method)
+{
+    // start logging here so we can check success or failure in
+    // arm_checks
+    if (plane.g.log_bitmask != NONE &&
+        !plane.DataFlash.logging_started()) {
+        plane.start_logging();
+    }
+
+    return AP_Arming::arm(method);
+}
+
 /*
   additional arming checks for plane
+
  */
 bool AP_Arming_Plane::pre_arm_checks(bool report)
 {

@@ -1,4 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 /*
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -343,7 +342,7 @@ failed:
     // new velocity and position vectors
     velocity_ef += accel_earth * delta_time;
     position += velocity_ef * delta_time;
-    velocity_air_ef = velocity_ef - wind_ef;
+    velocity_air_ef = velocity_ef + wind_ef;
     velocity_air_bf = dcm.transposed() * velocity_air_ef;
 
     update_position();
