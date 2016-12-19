@@ -164,9 +164,9 @@ void PX4RCOutput::set_freq_fd(int fd, uint32_t chmask, uint16_t freq_hz)
         hal.console->printf("RCOutput: Unable to set alt rate mask to 0x%x\n", (unsigned)_rate_mask);
     }
 
-    if (_output_mode == MODE_PWM_BRUSHED16KHZ) {
+    /*if (_output_mode == MODE_PWM_BRUSHED16KHZ) {
         ioctl(fd, PWM_SERVO_SET_UPDATE_CLOCK, 8);
-    }    
+    } */
 }
 
 /*
@@ -637,10 +637,10 @@ void PX4RCOutput::set_output_mode(enum output_mode mode)
         break;
     case MODE_PWM_BRUSHED16KHZ:
         // setup an 8MHz clock. This has the effect of scaling all outputs by 8x
-        ioctl(_pwm_fd, PWM_SERVO_SET_UPDATE_CLOCK, 8);
+        /*ioctl(_pwm_fd, PWM_SERVO_SET_UPDATE_CLOCK, 8);
         if (_alt_fd != -1) {
             ioctl(_alt_fd, PWM_SERVO_SET_UPDATE_CLOCK, 8);
-        }
+        }*/
         break;
     }
 }

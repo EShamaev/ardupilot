@@ -162,11 +162,11 @@ void SPIDevice::do_transfer(const uint8_t *send, uint8_t *recv, uint32_t len)
       yes, this is a nasty hack. Suggestions for a better method
       appreciated.
      */
-    bool use_irq_save = up_spi_use_irq_save(bus.dev);
+    /*bool use_irq_save = up_spi_use_irq_save(bus.dev);
     irqstate_t state;
     if (use_irq_save) {
         state = irqsave();
-    }
+    }*/
     perf_begin(perf);
     SPI_LOCK(bus.dev, true);
     SPI_SETFREQUENCY(bus.dev, frequency);
@@ -178,10 +178,10 @@ void SPIDevice::do_transfer(const uint8_t *send, uint8_t *recv, uint32_t len)
         SPI_SELECT(bus.dev, device_desc.device, false);
     }
     SPI_LOCK(bus.dev, false);
-    perf_end(perf);
+    /*perf_end(perf);
     if (use_irq_save) {
         irqrestore(state);
-    }
+    }*/
 }
 
 bool SPIDevice::transfer(const uint8_t *send, uint32_t send_len,
