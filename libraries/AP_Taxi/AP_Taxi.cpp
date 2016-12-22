@@ -49,7 +49,13 @@ const AP_Param::GroupInfo AP_Taxi::var_info[] = {
     // @Units: cm/s
     // @Increment: 1
     // @User: Advanced
-    AP_GROUPINFO("SPD", 2, AP_Taxi, _g_speed, 150),
+    AP_GROUPINFO("SPD", 3, AP_Taxi, _g_speed, 150),
 
-    AP_GROUPEND
+    // @Param: TAXI_THR_PID
+    // @DisplayName: Throttle PID control
+    // @Description: Controller that will regulate ground speed by varying throttle
+    // @Range: 1.000 100.000
+    // @Units: Hz
+    // @User: Advanced
+    AP_SUBGROUPINFO(_pid, "THR_", 4, AP_Taxi, AC_PID),
 };

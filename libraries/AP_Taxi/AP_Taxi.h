@@ -26,6 +26,7 @@
 #include <AP_Common/AP_Common.h>
 #include <AP_SpdHgtControl/AP_SpdHgtControl.h>
 #include <AP_Navigation/AP_Navigation.h>
+#include <AC_PID/AC_PID.h>
 
 /// @class  AP_Taxi
 /// @brief  Class managing ArduPlane taxi mode on the ground
@@ -40,6 +41,8 @@ public:
             ,nav_controller(_nav_controller)
     {
         AP_Param::setup_object_defaults(this, var_info);
+
+        //(float initial_p, float initial_i, float initial_d, float initial_imax, float initial_filt_hz, float dt)
     }
 
     static const struct AP_Param::GroupInfo var_info[];
@@ -54,6 +57,8 @@ private:
     AP_Float _min_thr;
     AP_Float _max_thr;
     AP_Float _g_speed;
+
+    AC_PID _pid{1, 0.1, 0.01, 50, 2, 0.02};
 };
 
 
