@@ -81,6 +81,10 @@ public:
     Mag_Info *find_mag_node(uint8_t node);
     void update_mag_state(uint8_t node);
 
+    // synchronization for RC output
+    void rc_out_sem_take();
+    void rc_out_sem_give();
+
 private:
     // ------------------------- GPS
     // 255 - means free node
@@ -119,6 +123,8 @@ private:
     bool _initialized;
     uint8_t _rco_armed;
     uint8_t _rco_safety;
+
+    AP_HAL::Semaphore *_rc_out_sem;
 
     class SystemClock: public uavcan::ISystemClock, uavcan::Noncopyable {
         SystemClock()
