@@ -97,7 +97,7 @@ const AP_Param::GroupInfo AP_BoardConfig::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("SER2_RTSCTS",    2, AP_BoardConfig, px4.ser2_rtscts, 2),
 #endif
-    
+
 #if CONFIG_HAL_BOARD == HAL_BOARD_PX4 || CONFIG_HAL_BOARD == HAL_BOARD_VRBRAIN
     // @Param: SAFETYENABLE
     // @DisplayName: Enable use of safety arming switch
@@ -129,7 +129,7 @@ const AP_Param::GroupInfo AP_BoardConfig::var_info[] = {
     // @Param: CAN_ENABLE
     // @DisplayName:  Enable use of UAVCAN devices
     // @Description: Enabling this option on a Pixhawk enables UAVCAN devices. Note that this uses about 25k of memory
-    // @Values: 0:Disabled,1:Enabled,2:Dynamic ID/Update
+    // @Values: 0:Disabled,1:Enabled first channel,2:Enabled both channels
     // @User: Advanced
     AP_GROUPINFO("CAN_ENABLE", 6, AP_BoardConfig, px4.can_enable, 0),
 #endif
@@ -164,7 +164,30 @@ const AP_Param::GroupInfo AP_BoardConfig::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("TYPE", 9, AP_BoardConfig, px4.board_type, BOARD_TYPE_DEFAULT),
 #endif
-    
+
+#if HAL_WITH_UAVCAN
+    // @Param: CAN_BITRATE
+    // @DisplayName:  Bitrate of CAN interface
+    // @Description: Bit rate can be set up to from 10000 to 1000000
+    // @Range: 10000 1000000
+    // @User: Advanced
+    AP_GROUPINFO("CAN_BITRATE", 10, AP_BoardConfig, px4.can_bitrate, 1000000),
+
+    // @Param: CAN_ENABLE
+    // @DisplayName:  Level of debug for UAVCAN devices
+    // @Description: Enabling this option will provide debug messages
+    // @Values: 0:Disabled,1:Major messages,2:All messages
+    // @User: Advanced
+    AP_GROUPINFO("CAN_DEBUG", 11, AP_BoardConfig, px4.can_debug, 0),
+
+    // @Param: UAVCAN_NODE
+    // @DisplayName:  UAVCAN node that is used for Ardupilot
+    // @Description: UAVCAN node should be set implicitly
+    // @Range: 1 250
+    // @User: Advanced
+    AP_GROUPINFO("UAVCAN_NODE", 12, AP_BoardConfig, px4.uavcan_node, 10),
+#endif
+
     AP_GROUPEND
 };
 
@@ -173,7 +196,7 @@ void AP_BoardConfig::init()
 #if CONFIG_HAL_BOARD == HAL_BOARD_PX4 || CONFIG_HAL_BOARD == HAL_BOARD_VRBRAIN
     px4_setup();
 #endif
-    
+
 #if HAL_HAVE_IMU_HEATER
     // let the HAL know the target temperature. We pass a pointer as
     // we want the user to be able to change the parameter without
