@@ -8,6 +8,8 @@
 
 extern const AP_HAL::HAL& hal;
 
+#if CONFIG_HAL_BOARD == HAL_BOARD_PX4
+
 extern bool _px4_thread_should_exit;
 
 namespace AP_HAL {
@@ -51,3 +53,5 @@ uint64_t millis64()
 }
 
 } // namespace AP_HAL
+
+#endif
