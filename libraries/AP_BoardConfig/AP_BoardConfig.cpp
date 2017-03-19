@@ -184,13 +184,6 @@ void AP_BoardConfig::init()
     _st_can_enable = (int8_t) _var_info_can._can_enable;
     _st_can_debug = (int8_t) _var_info_can._can_debug;
 #endif
-
-#if HAL_HAVE_IMU_HEATER
-    // let the HAL know the target temperature. We pass a pointer as
-    // we want the user to be able to change the parameter without
-    // rebooting
-    hal.util->set_imu_target_temp((int8_t *)&_imu_target_temperature);
-#endif
 }
 
 // set default value for BRD_SAFETY_MASK

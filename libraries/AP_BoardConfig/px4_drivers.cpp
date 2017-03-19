@@ -36,6 +36,9 @@
 extern const AP_HAL::HAL& hal;
 
 AP_BoardConfig::px4_board_type AP_BoardConfig::px4_configured_board;
+int8_t AP_BoardConfig::px4_can_enable;
+int8_t AP_BoardConfig::px4_can_debug;
+int8_t AP_BoardConfig::px4_uavcan_node;
 
 /* 
  declare driver main entry points
@@ -314,6 +317,11 @@ void AP_BoardConfig::px4_setup_drivers(void)
     }
 
     px4_configured_board = (enum px4_board_type)px4.board_type.get();
+#if HAL_WITH_UAVCAN
+    px4_can_enable = (int8_t) px4.can_enable;
+    px4_can_debug = (int8_t) px4.can_debug;
+    px4_uavcan_node = (int8_t) px4.uavcan_node;
+#endif
 
     switch (px4_configured_board) {
     case PX4_BOARD_PX4V1:
