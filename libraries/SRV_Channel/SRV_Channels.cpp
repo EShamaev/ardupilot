@@ -30,6 +30,9 @@ bool SRV_Channels::initialised;
 Bitmask SRV_Channels::function_mask{SRV_Channel::k_nr_aux_servo_functions};
 SRV_Channels::srv_function SRV_Channels::functions[SRV_Channel::k_nr_aux_servo_functions];
 
+AP_Int32* SRV_Channels::p_can_servo_bm = nullptr;
+AP_Int32* SRV_Channels::p_can_esc_bm = nullptr;
+
 const AP_Param::GroupInfo SRV_Channels::var_info[] = {
     // @Group: 1_
     // @Path: SRV_Channel.cpp
@@ -102,6 +105,18 @@ const AP_Param::GroupInfo SRV_Channels::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO_FRAME("_AUTO_TRIM",  17, SRV_Channels, auto_trim, 0, AP_PARAM_FRAME_PLANE),
     
+    // @Param: SERVO_BM
+    // @DisplayName: RC Out channels to be transmitted as servo
+    // @Description: Bitmask with one set for channel to be transmitted as a servo command
+    // @User: Standard
+    AP_GROUPINFO("_CANSRV_BM", 18, SRV_Channels, can_servo_bm, 0),
+
+    // @Param: ESC_BM
+    // @DisplayName: RC Out channels to be transmitted as ESC
+    // @Description: Bitmask with one set for channel to be transmitted as a ESC command
+    // @User: Standard
+    AP_GROUPINFO("_CANESC_BM", 19, SRV_Channels, can_esc_bm, 0),
+
     AP_GROUPEND
 };
 
@@ -111,6 +126,8 @@ const AP_Param::GroupInfo SRV_Channels::var_info[] = {
 SRV_Channels::SRV_Channels(void)
 {
     channels = obj_channels;
+    p_can_servo_bm = &can_servo_bm;
+    p_can_esc_bm = &can_esc_bm;
     
     // set defaults from the parameter table
     AP_Param::setup_object_defaults(this, var_info);
