@@ -9,7 +9,6 @@
 #include <unistd.h>
 
 #include <drivers/drv_pwm_output.h>
-#include <uORB/topics/actuator_direct.h>
 #include <drivers/drv_hrt.h>
 #include <drivers/drv_pwm_output.h>
 #include <drivers/drv_sbus.h>
@@ -54,10 +53,6 @@ void PX4RCOutput::init()
         return;
     }
 
-    for (uint8_t i=0; i<ORB_MULTI_MAX_INSTANCES; i++) {
-        _outputs[i].pwm_sub = orb_subscribe_multi(ORB_ID(actuator_outputs), i);
-    }
-
 #if !defined(CONFIG_ARCH_BOARD_PX4FMU_V4)
     struct stat st;
     // don't try and open px4fmu unless there is a px4io. Otherwise we
@@ -75,10 +70,7 @@ void PX4RCOutput::init()
         _period[i] = PWM_IGNORE_THIS_CHANNEL;
     }
 
-    // publish actuator vaules on demand
-    _actuator_direct_pub = nullptr;
-
-    // and armed state
+    // armed state
     _actuator_armed_pub = nullptr;
 }
 
@@ -364,16 +356,7 @@ uint16_t PX4RCOutput::read(uint8_t ch)
     if (ch >= PX4_NUM_OUTPUT_CHANNELS) {
         return 0;
     }
-    // if px4io has given us a value for this channel use that,
-    // otherwise use the value we last sent. This makes it easier to
-    // observe the behaviour of failsafe in px4io
-    for (uint8_t i=0; i<ORB_MULTI_MAX_INSTANCES; i++) {
-        if (_outputs[i].pwm_sub >= 0 && 
-            ch < _outputs[i].outputs.noutputs &&
-            _outputs[i].outputs.output[ch] > 0) {
-            return _outputs[i].outputs.output[ch];
-        }
-    }
+
     return _period[ch];
 }
 
@@ -427,53 +410,6 @@ void PX4RCOutput::_arm_actuators(bool arm)
     }
 }
 
-/*
-  publish new outputs to the actuator_direct topic
- */
-void PX4RCOutput::_publish_actuators(void)
-{
-	struct actuator_direct_s actuators;
-
-    if (_esc_pwm_min == 0 ||
-        _esc_pwm_max == 0) {
-        // not initialised yet
-        return;
-    }
-
-	actuators.nvalues = _max_channel;
-    if (actuators.nvalues > actuators.NUM_ACTUATORS_DIRECT) {
-        actuators.nvalues = actuators.NUM_ACTUATORS_DIRECT;
-    }
-    // don't publish more than 8 actuators for now, as the uavcan ESC
-    // driver refuses to update any motors if you try to publish more
-    // than 8
-    if (actuators.nvalues > 8) {
-        actuators.nvalues = 8;
-    }
-    bool armed = hal.util->get_soft_armed();
-	actuators.timestamp = hrt_absolute_time();
-    for (uint8_t i=0; i<actuators.nvalues; i++) {
-        if (!armed) {
-            actuators.values[i] = 0;
-        } else {
-            actuators.values[i] = (_period[i] - _esc_pwm_min) / (float)(_esc_pwm_max - _esc_pwm_min);
-        }
-        // actuator values are from -1 to 1
-        actuators.values[i] = actuators.values[i]*2 - 1;
-    }
-
-    if (_actuator_direct_pub == nullptr) {
-        _actuator_direct_pub = orb_advertise(ORB_ID(actuator_direct), &actuators);
-    } else {
-        orb_publish(ORB_ID(actuator_direct), _actuator_direct_pub, &actuators);
-    }
-    if (hal.util->safety_switch_state() != AP_HAL::Util::SAFETY_DISARMED) {
-        _arm_actuators(true);
-    } else {
-        _arm_actuators(false);
-    }
-}
-
 void PX4RCOutput::_send_outputs(void)
 {
     uint32_t now = AP_HAL::micros();
@@ -481,7 +417,7 @@ void PX4RCOutput::_send_outputs(void)
     if ((_enabled_channels & ((1U<<_servo_count)-1)) == 0) {
         // no channels enabled
         _arm_actuators(false);
-        goto update_pwm;
+        return;
     }
 
     // always send at least at 20Hz, otherwise the IO board may think
@@ -535,9 +471,6 @@ void PX4RCOutput::_send_outputs(void)
 
         if(AP_BoardConfig::get_can_enable() >= 1)
         {
-            // also publish to actuator_direct (UAVCAN is published via AP_UAVCAN)
-            _publish_actuators();
-
             if(hal.can_mgr != nullptr)
             {
                 AP_UAVCAN *ap_uc = hal.can_mgr->get_UAVCAN();
@@ -565,17 +498,6 @@ void PX4RCOutput::_send_outputs(void)
         perf_end(_perf_rcout);
         _last_output = now;
     }
-
-update_pwm:
-    for (uint8_t i=0; i<ORB_MULTI_MAX_INSTANCES; i++) {
-        bool rc_updated = false;
-        if (_outputs[i].pwm_sub >= 0 && 
-            orb_check(_outputs[i].pwm_sub, &rc_updated) == 0 && 
-            rc_updated) {
-            orb_copy(ORB_ID(actuator_outputs), _outputs[i].pwm_sub, &_outputs[i].outputs);
-        }
-    }
-
 }
 
 void PX4RCOutput::cork()
