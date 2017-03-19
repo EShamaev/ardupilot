@@ -437,10 +437,14 @@ void AP_GPS::detect_instance(uint8_t instance)
                     if (AP_BoardConfig::get_can_debug() >= 2) {
                         hal.console->printf("AP_GPS_UAVCAN registered\n\r");
                     }
+
+                    state[instance].status = NO_GPS;
+                    drivers[instance] = new_gps;
+                    timing[instance].last_message_time_ms = now;
+
+                    return;
                 }
             }
-
-            goto found_gps;
         }
         break;
 #endif
