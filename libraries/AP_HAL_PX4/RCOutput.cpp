@@ -541,6 +541,8 @@ void PX4RCOutput::_send_outputs(void)
                 AP_UAVCAN *ap_uc = hal.can_mgr->get_UAVCAN();
                 if(ap_uc != nullptr)
                 {
+                    ap_uc->rc_out_sem_take();
+
                     for(uint8_t i = 0; i < _max_channel; i++)
                     {
                         ap_uc->rco_write(_period[i], i);
@@ -552,6 +554,8 @@ void PX4RCOutput::_send_outputs(void)
                     } else {
                         ap_uc->rco_arm_actuators(false);
                     }
+
+                    ap_uc->rc_out_sem_give();
                 }
             }
         }

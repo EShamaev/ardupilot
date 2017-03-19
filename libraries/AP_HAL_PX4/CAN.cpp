@@ -968,8 +968,6 @@ bool PX4CANDriver::begin(uint32_t bitrate, uint8_t can_number)
             // TODO: Something
             for (UAVCAN_init_tries = 0; UAVCAN_init_tries < 100; UAVCAN_init_tries++) {
                 if (p_uavcan->try_init() == true) {
-                    // install hook to report GPS data
-                    //g2.uavcan_ap.set_ap_GPS(&gps);
                     break;
                 }
                 hal.scheduler->delay(1);
