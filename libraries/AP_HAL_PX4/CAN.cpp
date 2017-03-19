@@ -72,7 +72,7 @@ uavcan::MonotonicTime clock::getMonotonic()
 }
 
 BusEvent::BusEvent(PX4CANDriver& can_driver) :
-    _signal(false)
+    _signal(0)
 {
 }
 
@@ -84,34 +84,42 @@ bool BusEvent::wait(uavcan::MonotonicDuration duration)
 {
     struct hrt_call wait_call;
 
-    if(_signal == true)
+    irqstate_t irs = irqsave();
+    if(_signal)
     {
-        _signal = false;
+        _signal--;
+        irqrestore(irs);
         return true;
     }
 
     sem_init(&_wait_semaphore, 0, 0);
+    irqrestore(irs);
+
     hrt_call_after(&wait_call, duration.toUSec(), (hrt_callout) signalFromCallOut, this);
     sem_wait(&_wait_semaphore);
+
+    hrt_cancel(&wait_call);
+
+    irs = irqsave();
     if (_signal) {
-        if (!hrt_called(&wait_call)) {
-            hrt_cancel(&wait_call);
-        }
+        _signal--;
+        irqrestore(irs);
+
         return true;
     }
+    irqrestore(irs);
 
     return false;
 }
 
 void BusEvent::signalFromCallOut(BusEvent *sem)
 {
-    sem->_signal = false;
     sem_post(&sem->_wait_semaphore);
 }
 
 void BusEvent::signalFromInterrupt()
 {
-    _signal = true;
+    _signal++;
     sem_post(&_wait_semaphore);
 }
 

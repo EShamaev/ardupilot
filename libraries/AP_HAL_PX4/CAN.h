@@ -100,7 +100,7 @@ public:
 
     void signalFromInterrupt();
     sem_t _wait_semaphore;
-    volatile bool _signal;
+    volatile uint8_t _signal;
 };
 
 class PX4CAN: public AP_HAL::CAN {
