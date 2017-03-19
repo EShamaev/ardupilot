@@ -363,50 +363,45 @@ void AP_UAVCAN::do_cyclic(void)
                 if (msg.commands.size() > 0) {
                     act_out_array->broadcast(msg);
                 }
-            }
 
-            // if we have any ESC's in bitmask
-            if (_esc_bm > 0) {
-                static const int cmd_max = uavcan::equipment::esc::RawCommand::FieldTypes::cmd::RawValueType::max();
-                uavcan::equipment::esc::RawCommand esc_msg;
+                // if we have any ESC's in bitmask
+                if (_esc_bm > 0) {
+                    static const int cmd_max = uavcan::equipment::esc::RawCommand::FieldTypes::cmd::RawValueType::max();
+                    uavcan::equipment::esc::RawCommand esc_msg;
 
-                uint8_t active_esc_num = 0, max_esc_num = 0;
+                    uint8_t active_esc_num = 0, max_esc_num = 0;
 
-                // find out how many esc we have enabled and if they are active at all
-                for (uint8_t i = 0; i < UAVCAN_RCO_NUMBER; i++) {
-                    if ((((uint32_t) 1) << i) & _esc_bm) {
-                        max_esc_num = i;
-                        if (_rco_conf[i].active) {
-                            active_esc_num++;
+                    // find out how many esc we have enabled and if they are active at all
+                    for (uint8_t i = 0; i < UAVCAN_RCO_NUMBER; i++) {
+                        if ((((uint32_t) 1) << i) & _esc_bm) {
+                            max_esc_num = i;
+                            if (_rco_conf[i].active) {
+                                active_esc_num++;
+                            }
                         }
                     }
-                }
 
-                // if at least one is active (update) we need to send to all
-                if (active_esc_num > 0) {
-                    uint8_t k = 0;
+                    // if at least one is active (update) we need to send to all
+                    if (active_esc_num > 0) {
+                        k = 0;
 
-                    for (uint8_t i = 0; i < max_esc_num; i++) {
-                        uavcan::equipment::actuator::Command cmd;
+                        for (uint8_t i = 0; i < max_esc_num; i++) {
+                            uavcan::equipment::actuator::Command cmd;
 
-                        if (_rco_armed && ((((uint32_t) 1) << i) & _esc_bm)) {
-                            float scaled = SRV_Channels::get_output_norm_from_pwm(i, _rco_conf[i].pulse);
-                            /*
-                             (float) (_rco_conf[i].pulse - esc_min)
-                             / (float) (esc_max - esc_min) * cmd_max;
-                             */
+                            if ((((uint32_t) 1) << i) & _esc_bm) {
+                                float scaled = SRV_Channels::get_output_norm_from_pwm(i, _rco_conf[i].pulse);
+                                scaled = constrain_float(scaled, 0.0, cmd_max);
 
-                            scaled = constrain_float(scaled, 0.0, cmd_max);
+                                esc_msg.cmd.push_back(static_cast<int>(scaled));
+                            } else {
+                                esc_msg.cmd.push_back(static_cast<unsigned>(0));
+                            }
 
-                            esc_msg.cmd.push_back(static_cast<int>(scaled));
-                        } else {
-                            esc_msg.cmd.push_back(static_cast<unsigned>(0));
+                            k++;
                         }
 
-                        k++;
+                        esc_raw->broadcast(esc_msg);
                     }
-
-                    esc_raw->broadcast(esc_msg);
                 }
             }
 
