@@ -47,7 +47,6 @@ class AP_GPS_Backend;
 class AP_GPS
 {
 public:
-
     friend class AP_GPS_ERB;
     friend class AP_GPS_GSOF;
     friend class AP_GPS_MAV;
@@ -84,6 +83,7 @@ public:
         GPS_TYPE_ERB = 13,
         GPS_TYPE_MAV = 14,
         GPS_TYPE_NOVA = 15,
+        GPS_TYPE_UAVCAN = 16,
     };
 
     /// GPS status codes
@@ -483,5 +483,4 @@ private:
 
     // calculate the blended state
     void calc_blended_state(void);
-
 };
