@@ -19,13 +19,12 @@
 
 extern "C" typedef int (*main_fn_t)(int argc, char **);
 
-class AP_BoardConfig
-{
+class AP_BoardConfig {
 public:
     // constructor
     AP_BoardConfig(void)
     {
-		AP_Param::setup_object_defaults(this, var_info);
+        AP_Param::setup_object_defaults(this, var_info);
     };
 
     void init(void);
@@ -66,11 +65,37 @@ public:
     void set_default_safety_ignore_mask(uint16_t mask);
 
 #if CONFIG_HAL_BOARD == HAL_BOARD_PX4 || CONFIG_HAL_BOARD == HAL_BOARD_VRBRAIN
-    static enum px4_board_type get_board_type(void) {
+    static enum px4_board_type get_board_type(void)
+    {
         return px4_configured_board;
     }
 #endif
-    
+
+    static int8_t get_can_enable()
+    {
+#if HAL_WITH_UAVCAN
+        return px4_can_enable;
+#else
+        return 0;
+#endif
+    }
+    static int8_t get_can_debug()
+    {
+#if HAL_WITH_UAVCAN
+        return px4_can_debug;
+#else
+        return 0;
+#endif
+    }
+    static int8_t get_uavcan_node()
+    {
+#if HAL_WITH_UAVCAN
+        return px4_uavcan_node;
+#else
+        return 0;
+#endif
+    }
+
 private:
     AP_Int16 vehicleSerialNumber;
 
@@ -81,6 +106,9 @@ private:
         AP_Int32 ignore_safety_channels;
 #if HAL_WITH_UAVCAN
         AP_Int8 can_enable;
+        AP_Int8 can_debug;
+        AP_Int8 uavcan_node;
+        AP_Int32 can_bitrate;
 #endif
 #if CONFIG_HAL_BOARD == HAL_BOARD_PX4
         AP_Int8 ser1_rtscts;
@@ -91,7 +119,12 @@ private:
     } px4;
 
     static enum px4_board_type px4_configured_board;
-    
+#if HAL_WITH_UAVCAN
+    static int8_t px4_can_enable;
+    static int8_t px4_can_debug;
+    static int8_t px4_uavcan_node;
+#endif
+
     void px4_drivers_start(void);
     void px4_setup(void);
     void px4_setup_pwm(void);
@@ -105,11 +138,11 @@ private:
     void px4_setup_px4io(void);
     void px4_tone_alarm(const char *tone_string);
     bool spi_check_register(const char *devname, uint8_t regnum, uint8_t value, uint8_t read_flag = 0x80);
-    
+
 #if CONFIG_HAL_BOARD == HAL_BOARD_PX4
     void px4_autodetect(void);
 #endif
-    
+
 #endif // HAL_BOARD_PX4 || HAL_BOARD_VRBRAIN
 
     // target temperarure for IMU in Celsius, or -1 to disable
