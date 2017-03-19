@@ -19,6 +19,12 @@
 #include "GPIO.h"
 #include "I2CDevice.h"
 #include "SPIDevice.h"
+#include "CAN.h"
+
+#include <AP_HAL_Empty/AP_HAL_Empty.h>
+#include <AP_HAL_Empty/AP_HAL_Empty_Private.h>
+
+#include <AP_BoardConfig/AP_BoardConfig.h>
 
 #include <stdlib.h>
 #include <systemlib/systemlib.h>
@@ -44,6 +50,8 @@ static PX4RCOutput rcoutDriver;
 static PX4AnalogIn analogIn;
 static PX4Util utilInstance;
 static PX4GPIO gpioDriver;
+
+//static PX4CANDriver can_mgr_instance;
 
 static PX4::I2CDeviceManager i2c_mgr_instance;
 static PX4::SPIDeviceManager spi_mgr_instance;
@@ -106,7 +114,8 @@ HAL_PX4::HAL_PX4() :
         &rcoutDriver, /* rcoutput */
         &schedulerInstance, /* scheduler */
         &utilInstance, /* util */
-        nullptr)    /* no onboard optical flow */
+        nullptr,    /* no onboard optical flow */
+        nullptr)   /* CAN */
 {}
 
 bool _px4_thread_should_exit = false;        /**< Daemon exit flag */
