@@ -27,7 +27,6 @@
 #include "AP_GPS_MTK.h"
 #include "AP_GPS_MTK19.h"
 #include "AP_GPS_NMEA.h"
-#include "AP_GPS_PX4.h"
 #include "AP_GPS_QURT.h"
 #include "AP_GPS_SBF.h"
 #include "AP_GPS_SBP.h"
@@ -394,16 +393,6 @@ void AP_GPS::detect_instance(uint8_t instance)
     uint32_t now = AP_HAL::millis();
 
     switch (_type[instance]) {
-#if CONFIG_HAL_BOARD == HAL_BOARD_PX4
-    case GPS_TYPE_PX4:
-        // check for explicitly chosen PX4 GPS beforehand
-        // it is not possible to autodetect it, nor does it require a real UART
-        _broadcast_gps_type("PX4", instance, -1); // baud rate isn't valid
-        new_gps = new AP_GPS_PX4(*this, state[instance], _port[instance]);
-        goto found_gps;
-        break;
-#endif
-
 #if CONFIG_HAL_BOARD == HAL_BOARD_QURT
     case GPS_TYPE_QURT:
         _broadcast_gps_type("QURTGPS", instance, -1); // baud rate isn't valid
