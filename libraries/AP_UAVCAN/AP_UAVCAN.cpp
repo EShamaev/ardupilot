@@ -177,7 +177,7 @@ static uavcan::Publisher<uavcan::equipment::actuator::ArrayCommand> *act_out_arr
 static uavcan::Publisher<uavcan::equipment::esc::RawCommand> *esc_raw;
 
 AP_UAVCAN::AP_UAVCAN() :
-        _initialized(false), _rco_armed(false), _rco_safety(false), _node_allocator(UAVCAN_NODE_POOL_SIZE, UAVCAN_NODE_POOL_SIZE)
+        _initialized(false), _rco_armed(false), _rco_safety(false), _rc_out_sem(nullptr), _node_allocator(UAVCAN_NODE_POOL_SIZE, UAVCAN_NODE_POOL_SIZE)
 {
     for (uint8_t i = 0; i < UAVCAN_RCO_NUMBER; i++) {
         _rco_conf[i].active = false;
@@ -208,6 +208,8 @@ AP_UAVCAN::AP_UAVCAN() :
         _mag_listener_to_node[i] = 255;
         _mag_listeners[i] = nullptr;
     }
+
+    _rc_out_sem = hal.util->new_semaphore();
 }
 
 AP_UAVCAN::~AP_UAVCAN()
@@ -324,6 +326,19 @@ bool AP_UAVCAN::try_init(void)
     return false;
 }
 
+void AP_UAVCAN::rc_out_sem_take()
+{
+    bool sem_ret = _rc_out_sem->take(0);
+    if(sem_ret == false && AP_BoardConfig::get_can_debug() >= 1) {
+        hal.console->printf("AP_UAVCAN RCOut semaphore fail\n\r");
+    }
+}
+
+void AP_UAVCAN::rc_out_sem_give()
+{
+    _rc_out_sem->give();
+}
+
 void AP_UAVCAN::do_cyclic(void)
 {
 
@@ -336,6 +351,8 @@ void AP_UAVCAN::do_cyclic(void)
         if (error < 0) {
             hal.scheduler->delay_microseconds(1000);
         } else {
+            rc_out_sem_take();
+
             if (_rco_armed) {
                 // TODO: several transmittions if did not fit in 15 servos
                 uavcan::equipment::actuator::ArrayCommand msg;
@@ -409,6 +426,8 @@ void AP_UAVCAN::do_cyclic(void)
                 // mark as transmitted
                 _rco_conf[i].active = false;
             }
+
+            rc_out_sem_give();
         }
     }
 }
