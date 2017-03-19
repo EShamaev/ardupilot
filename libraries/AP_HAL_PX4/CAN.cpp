@@ -92,6 +92,7 @@ bool BusEvent::wait(uavcan::MonotonicDuration duration)
     }
 
     sem_init(&_wait_semaphore, 0, 0);
+
     irqrestore(irs);
 
     hrt_call_after(&wait_call, duration.toUSec(), (hrt_callout) signalFromCallOut, this);
@@ -968,9 +969,9 @@ bool PX4CANDriver::begin(uint32_t bitrate, uint8_t can_number)
     if (init(bitrate, PX4CAN::OperatingMode::NormalMode, can_number) >= 0) {
         initialized_ = true;
 
-        //        if (p_uavcan == UAVCAN_NULLPTR) {
-        //            p_uavcan = new AP_UAVCAN;
-        if (p_uavcan != UAVCAN_NULLPTR) {
+        if (p_uavcan == UAVCAN_NULLPTR) {
+            p_uavcan = new AP_UAVCAN;
+
             uint16_t UAVCAN_init_tries;
             // TODO: Something
             for (UAVCAN_init_tries = 0; UAVCAN_init_tries < 100; UAVCAN_init_tries++) {

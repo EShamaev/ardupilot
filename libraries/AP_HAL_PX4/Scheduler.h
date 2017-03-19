@@ -16,6 +16,7 @@
 #define APM_SPI_PRIORITY        242
 #define APM_CAN_PRIORITY        179
 #define APM_I2C_PRIORITY        178
+#define APM_CAN_PRIORITY        100
 #define APM_UART_PRIORITY        60
 #define APM_STORAGE_PRIORITY     59
 #define APM_IO_PRIORITY          58
