@@ -15,6 +15,8 @@
 
 extern const AP_HAL::HAL& hal;
 
+#define debug_baro_uavcan(level, fmt, args...) do { if ((level) <= AP_BoardConfig::get_can_debug()) { hal.console->printf(fmt, ##args); }} while (0)
+
 // There is limitation to use only one UAVCAN barometer now.
 
 /*
@@ -32,11 +34,11 @@ AP_Baro_UAVCAN::AP_Baro_UAVCAN(AP_Baro &baro) :
             hal.scheduler->delay(2000);
             ap_uavcan->register_baro_listener(this, 1);
 
-            if (AP_BoardConfig::get_can_debug() >= 2) {
-                hal.console->printf("AP_Baro_UAVCAN loaded\n\r");
-            }
+            debug_baro_uavcan(2, "AP_Baro_UAVCAN loaded\n\r");
         }
     }
+
+    _sem_baro = hal.util->new_semaphore();
 }
 
 AP_Baro_UAVCAN::~AP_Baro_UAVCAN()
@@ -45,9 +47,7 @@ AP_Baro_UAVCAN::~AP_Baro_UAVCAN()
         AP_UAVCAN *ap_uavcan = hal.can_mgr->get_UAVCAN();
         if (ap_uavcan != nullptr) {
             ap_uavcan->remove_baro_listener(this);
-            if (AP_BoardConfig::get_can_debug() >= 2) {
-                hal.console->printf("AP_Baro_UAVCAN destructed\n\r");
-            }
+            debug_baro_uavcan(2, "AP_Baro_UAVCAN destructed\n\r");
         }
     }
 }
@@ -55,16 +55,24 @@ AP_Baro_UAVCAN::~AP_Baro_UAVCAN()
 // Read the sensor
 void AP_Baro_UAVCAN::update(void)
 {
-    _copy_to_frontend(_instance, _pressure, _temperature);
+    if (_sem_baro->take(0))
+    {
+        _copy_to_frontend(_instance, _pressure, _temperature);
 
-    _frontend.set_external_temperature(_temperature);
+        _frontend.set_external_temperature(_temperature);
+        _sem_baro->give();
+    }
 }
 
 void AP_Baro_UAVCAN::handle_baro_msg(float pressure, float temperature)
 {
-    _pressure = pressure;
-    _temperature = temperature - 273.15f;
-    _last_timestamp = AP_HAL::micros64();
+    if (_sem_baro->take(0))
+    {
+        _pressure = pressure;
+        _temperature = temperature - 273.15f;
+        _last_timestamp = AP_HAL::micros64();
+        _sem_baro->give();
+    }
 }
 
 #endif // HAL_WITH_UAVCAN
