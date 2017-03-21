@@ -327,5 +327,6 @@ public:
 
     AP_UAVCAN *p_uavcan;
     AP_UAVCAN *get_UAVCAN(void) override;
+    void set_UAVCAN(AP_UAVCAN *uavcan) override;
 };
 }

@@ -85,9 +85,8 @@ bool BusEvent::wait(uavcan::MonotonicDuration duration)
     struct hrt_call wait_call;
 
     irqstate_t irs = irqsave();
-    if(_signal)
-    {
-        _signal--;
+    if (_signal) {
+        _signal = 0;
         irqrestore(irs);
         return true;
     }
@@ -102,7 +101,7 @@ bool BusEvent::wait(uavcan::MonotonicDuration duration)
 
     irs = irqsave();
     if (_signal) {
-        _signal--;
+        _signal = 0;
         irqrestore(irs);
 
         return true;
@@ -428,7 +427,7 @@ int PX4CAN::init(const uint32_t bitrate, const OperatingMode mode)
         can_->MCR &= ~bxcan::MCR_SLEEP; // Exit sleep mode
         can_->MCR |= bxcan::MCR_INRQ; // Request init
 
-        can_->IER = 0; // Disable interrupts while initialization is in progress
+        can_->IER = 0; // Disable CAN interrupts while initialization is in progress
     }
 
     if (!waitMsrINakBitStateChange(true)) {
@@ -440,7 +439,7 @@ int PX4CAN::init(const uint32_t bitrate, const OperatingMode mode)
     }
 
     /*
-     * Object state - interrupts are disabled, so it's safe to modify it now
+     * Object state - CAN interrupts are disabled, so it's safe to modify it now
      */
     rx_queue_.clear();
     error_cnt_ = 0;
@@ -969,23 +968,20 @@ bool PX4CANDriver::begin(uint32_t bitrate, uint8_t can_number)
     if (init(bitrate, PX4CAN::OperatingMode::NormalMode, can_number) >= 0) {
         initialized_ = true;
 
-        if (p_uavcan == UAVCAN_NULLPTR) {
-            p_uavcan = new AP_UAVCAN;
-
+        //        if (p_uavcan == UAVCAN_NULLPTR) {
+        //            p_uavcan = new AP_UAVCAN;
+        if (p_uavcan != UAVCAN_NULLPTR) {
             uint16_t UAVCAN_init_tries;
             // TODO: Something
             for (UAVCAN_init_tries = 0; UAVCAN_init_tries < 100; UAVCAN_init_tries++) {
                 if (p_uavcan->try_init() == true) {
-                    break;
+                    return true;
                 }
                 hal.scheduler->delay(1);
             }
         }
-
-        return true;
-    } else {
-        return false;
     }
+    return false;
 }
 
 bool PX4CANDriver::is_initialized()
@@ -996,6 +992,11 @@ bool PX4CANDriver::is_initialized()
 AP_UAVCAN *PX4CANDriver::get_UAVCAN(void)
 {
     return p_uavcan;
+}
+
+void PX4CANDriver::set_UAVCAN(AP_UAVCAN *uavcan)
+{
+    p_uavcan = uavcan;
 }
 
 /*
