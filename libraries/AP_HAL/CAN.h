@@ -134,5 +134,6 @@ public:
     virtual bool is_initialized() = 0;
 
     virtual AP_UAVCAN *get_UAVCAN(void);
+    virtual void set_UAVCAN(AP_UAVCAN *uavcan);
 };
 
