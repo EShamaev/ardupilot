@@ -3,8 +3,7 @@
 #include "AP_Baro_Backend.h"
 #include <AP_UAVCAN/AP_UAVCAN.h>
 
-class AP_Baro_UAVCAN : public AP_Baro_Backend
-{
+class AP_Baro_UAVCAN : public AP_Baro_Backend {
 public:
     AP_Baro_UAVCAN(AP_Baro &);
     ~AP_Baro_UAVCAN() override;
