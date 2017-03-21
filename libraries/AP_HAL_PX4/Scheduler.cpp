@@ -24,8 +24,10 @@
 #include <AP_Scheduler/AP_Scheduler.h>
 #include <AP_BoardConfig/AP_BoardConfig.h>
 
+#ifdef HAL_WITH_UAVCAN
 #include "CAN.h"
 #include <AP_UAVCAN/AP_UAVCAN.h>
+#endif
 
 using namespace PX4;
 

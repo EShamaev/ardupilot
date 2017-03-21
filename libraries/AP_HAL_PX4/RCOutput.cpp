@@ -16,7 +16,9 @@
 
 #include <AP_BoardConfig/AP_BoardConfig.h>
 
+#ifdef HAL_WITH_UAVCAN
 #include <AP_UAVCAN/AP_UAVCAN.h>
+#endif
 
 extern const AP_HAL::HAL& hal;
 
