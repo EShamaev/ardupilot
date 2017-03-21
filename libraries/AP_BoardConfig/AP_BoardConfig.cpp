@@ -30,6 +30,8 @@
 #include <drivers/drv_sbus.h>
 #endif
 
+#include <AP_UAVCAN/AP_UAVCAN.h>
+
 #if CONFIG_HAL_BOARD == HAL_BOARD_PX4
 # define BOARD_SAFETY_ENABLE_DEFAULT 1
 #if defined(CONFIG_ARCH_BOARD_PX4FMU_V1)
@@ -126,12 +128,9 @@ const AP_Param::GroupInfo AP_BoardConfig::var_info[] = {
     AP_GROUPINFO("SERIAL_NUM", 5, AP_BoardConfig, vehicleSerialNumber, 0),
 
 #if HAL_WITH_UAVCAN
-    // @Param: CAN_ENABLE
-    // @DisplayName:  Enable use of UAVCAN devices
-    // @Description: Enabling this option on a Pixhawk enables UAVCAN devices. Note that this uses about 25k of memory
-    // @Values: 0:Disabled,1:Enabled first channel,2:Enabled both channels
-    // @User: Advanced
-    AP_GROUPINFO("CAN_ENABLE", 6, AP_BoardConfig, px4.can_enable, 0),
+    // @Group: CAN_
+    // @Path: ../libraries/AP_BoardConfig/AP_BoardConfig.cpp
+    AP_SUBGROUPINFO(_var_info_can, "CAN_", 6, AP_BoardConfig, AP_BoardConfig::CAN_var_info),
 #endif
 
 #if CONFIG_HAL_BOARD == HAL_BOARD_PX4 || CONFIG_HAL_BOARD == HAL_BOARD_VRBRAIN
@@ -165,36 +164,60 @@ const AP_Param::GroupInfo AP_BoardConfig::var_info[] = {
     AP_GROUPINFO("TYPE", 9, AP_BoardConfig, px4.board_type, BOARD_TYPE_DEFAULT),
 #endif
 
+    AP_GROUPEND
+};
+
 #if HAL_WITH_UAVCAN
+// table of user settable CAN bus parameters
+const AP_Param::GroupInfo AP_BoardConfig::CAN_var_info::var_info[] = {
+    // @Param: CAN_ENABLE
+    // @DisplayName:  Enable use of CAN buses
+    // @Description: Enabling this option enables use of CAN buses.
+    // @Values: 0:Disabled,1:Enabled first channel,2:Enabled both channels
+    // @User: Advanced
+    AP_GROUPINFO_FLAGS("ENABLE", 0, AP_BoardConfig::CAN_var_info, _can_enable, 0, AP_PARAM_FLAG_ENABLE),
+
     // @Param: CAN_BITRATE
     // @DisplayName:  Bitrate of CAN interface
     // @Description: Bit rate can be set up to from 10000 to 1000000
     // @Range: 10000 1000000
     // @User: Advanced
-    AP_GROUPINFO("CAN_BITRATE", 10, AP_BoardConfig, px4.can_bitrate, 1000000),
+    AP_GROUPINFO("BITRATE", 1, AP_BoardConfig::CAN_var_info, _can_bitrate, 1000000),
 
     // @Param: CAN_ENABLE
-    // @DisplayName:  Level of debug for UAVCAN devices
+    // @DisplayName:  Level of debug for CAN devices
     // @Description: Enabling this option will provide debug messages
     // @Values: 0:Disabled,1:Major messages,2:All messages
     // @User: Advanced
-    AP_GROUPINFO("CAN_DEBUG", 11, AP_BoardConfig, px4.can_debug, 0),
+    AP_GROUPINFO("DEBUG", 2, AP_BoardConfig::CAN_var_info, _can_debug, 2),
 
-    // @Param: UAVCAN_NODE
-    // @DisplayName:  UAVCAN node that is used for Ardupilot
-    // @Description: UAVCAN node should be set implicitly
-    // @Range: 1 250
+    // @Param: ENABLE
+    // @DisplayName:  Enable use of UAVCAN devices
+    // @Description: Enabling this option on a Pixhawk enables UAVCAN devices. Note that this uses about 25k of memory
+    // @Values: 0:Disabled,1:Enabled first channel,2:Enabled both channels
     // @User: Advanced
-    AP_GROUPINFO("UAVCAN_NODE", 12, AP_BoardConfig, px4.uavcan_node, 10),
-#endif
+    AP_GROUPINFO("UC_EN", 3, AP_BoardConfig::CAN_var_info, _uavcan_enable, 1),
+
+    // @Group: UAVCAN_
+    // @Path: ../libraries/AP_UAVCAN/AP_UAVCAN.cpp
+    AP_SUBGROUPPTR(_uavcan, "UC_", 4, AP_BoardConfig::CAN_var_info, AP_UAVCAN),
 
     AP_GROUPEND
 };
+#endif
+
+int8_t AP_BoardConfig::_st_can_enable;
+int8_t AP_BoardConfig::_st_can_debug;
 
 void AP_BoardConfig::init()
 {
 #if CONFIG_HAL_BOARD == HAL_BOARD_PX4 || CONFIG_HAL_BOARD == HAL_BOARD_VRBRAIN
     px4_setup();
+#endif
+
+#if HAL_WITH_UAVCAN
+    _st_can_enable = (int8_t) _var_info_can._can_enable;
+    _st_can_debug = (int8_t) _var_info_can._can_debug;
 #endif
 
 #if HAL_HAVE_IMU_HEATER
