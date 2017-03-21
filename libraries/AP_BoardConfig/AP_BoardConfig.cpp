@@ -206,10 +206,10 @@ const AP_Param::GroupInfo AP_BoardConfig::CAN_var_info::var_info[] = {
 
     AP_GROUPEND
 };
-#endif
 
 int8_t AP_BoardConfig::_st_can_enable;
 int8_t AP_BoardConfig::_st_can_debug;
+#endif
 
 void AP_BoardConfig::init()
 {

@@ -219,23 +219,30 @@ void AP_BoardConfig::px4_setup_canbus(void)
             if(_var_info_can._uavcan_enable > 0)
             {
                 _var_info_can._uavcan = new AP_UAVCAN;
-                AP_Param::load_object_from_eeprom(_var_info_can._uavcan, AP_UAVCAN::var_info);
+                if(_var_info_can._uavcan != nullptr)
+                {
+                    AP_Param::load_object_from_eeprom(_var_info_can._uavcan, AP_UAVCAN::var_info);
 
-                hal.can_mgr->set_UAVCAN(_var_info_can._uavcan);
+                    hal.can_mgr->set_UAVCAN(_var_info_can._uavcan);
 
-                bool initret = hal.can_mgr->begin(_var_info_can._can_bitrate, _var_info_can._can_enable);
-                if (!initret) {
-                    hal.console->printf("Failed to initialize can_mgr\n");
-                } else {
-                    hal.console->printf("can_mgr initialized well\n");
+                    bool initret = hal.can_mgr->begin(_var_info_can._can_bitrate, _var_info_can._can_enable);
+                    if (!initret) {
+                        hal.console->printf("Failed to initialize can_mgr\n\r");
+                    } else {
+                        hal.console->printf("can_mgr initialized well\n\r");
 
-                    // start UAVCAN working thread
-                    hal.scheduler->create_uavcan_thread();
+                        // start UAVCAN working thread
+                        hal.scheduler->create_uavcan_thread();
+                    }
+                } else
+                {
+                    _var_info_can._uavcan_enable.set(0);
+                    hal.console->printf("AP_UAVCAN failed to allocate\n\r");
                 }
             }
         }
     }
-#endif // CONFIG_HAL_BOARD && !CONFIG_ARCH_BOARD_PX4FMU_V1
+#endif
 }
 
 extern "C" int waitpid(pid_t, int *, int);
