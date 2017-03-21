@@ -30,7 +30,9 @@
 #include <drivers/drv_sbus.h>
 #endif
 
+#if HAL_WITH_UAVCAN
 #include <AP_UAVCAN/AP_UAVCAN.h>
+#endif
 
 #if CONFIG_HAL_BOARD == HAL_BOARD_PX4
 # define BOARD_SAFETY_ENABLE_DEFAULT 1
