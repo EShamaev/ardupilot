@@ -25,10 +25,13 @@
 
 extern const AP_HAL::HAL& hal;
 
+#define debug_gps_uavcan(level, fmt, args...) do { if ((level) <= AP_BoardConfig::get_can_debug()) { hal.console->printf(fmt, ##args); }} while (0)
+
 AP_GPS_UAVCAN::AP_GPS_UAVCAN(AP_GPS &_gps, AP_GPS::GPS_State &_state, AP_HAL::UARTDriver *_port) :
     AP_GPS_Backend(_gps, _state, _port)
 {
     _new_data = false;
+    _sem_gnss = hal.util->new_semaphore();
 }
 
 // For each instance we need to deregister from AP_UAVCAN class
@@ -39,9 +42,7 @@ AP_GPS_UAVCAN::~AP_GPS_UAVCAN()
         if (ap_uavcan != nullptr) {
             ap_uavcan->remove_gps_listener(this);
 
-            if (AP_BoardConfig::get_can_debug() >= 2) {
-                hal.console->printf("AP_GPS_UAVCAN destructed\n\r");
-            }
+            debug_gps_uavcan(2, "AP_GPS_UAVCAN destructed\n\r");
         }
     }
 }
@@ -49,18 +50,30 @@ AP_GPS_UAVCAN::~AP_GPS_UAVCAN()
 // Consume new data and mark it received
 bool AP_GPS_UAVCAN::read(void)
 {
-    if (_new_data) {
-        _new_data = false;
-        return true;
-    }
+    if (_sem_gnss->take(0))
+    {
+        if (_new_data) {
+            _new_data = false;
 
+            state = _interm_state;
+            _sem_gnss->give();
+
+            return true;
+        }
+
+        _sem_gnss->give();
+    }
     return false;
 }
 
 void AP_GPS_UAVCAN::handle_gnss_msg(const AP_GPS::GPS_State &msg)
 {
-    state = msg;
-    _new_data = true;
+    if (_sem_gnss->take(0))
+    {
+        _interm_state = msg;
+        _new_data = true;
+        _sem_gnss->give();
+    }
 }
 
 #endif // HAL_WITH_UAVCAN

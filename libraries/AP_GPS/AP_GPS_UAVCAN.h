@@ -31,7 +31,11 @@ public:
 
     bool read() override;
 
+    // This method is called from UAVCAN thread
     void handle_gnss_msg(const AP_GPS::GPS_State &msg) override;
 private:
     bool _new_data;
+
+    AP_GPS::GPS_State _interm_state;
+    AP_HAL::Semaphore *_sem_gnss;
 };
