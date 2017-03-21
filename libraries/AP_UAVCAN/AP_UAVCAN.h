@@ -41,13 +41,15 @@ public:
     AP_UAVCAN();
     ~AP_UAVCAN();
 
+    static const struct AP_Param::GroupInfo var_info[];
+
     // this function will register the listening class on a first free channel or on the specified channel
     // if preferred_channel = 0 then free channel will be searched for
     // if preferred_channel > 0 then listener will be added to specific channel
     // return value is the number of assigned channel or 0 if fault
     // channel numbering starts from 1
     uint8_t register_gps_listener(AP_GPS_Backend* new_listener,
-                                uint8_t preferred_channel);
+                                  uint8_t preferred_channel);
     // Removes specified listener from all nodes
     void remove_gps_listener(AP_GPS_Backend* rem_listener);
 
@@ -66,7 +68,7 @@ public:
     };
 
     uint8_t register_baro_listener(AP_Baro_Backend* new_listener,
-                                uint8_t preferred_channel);
+                                   uint8_t preferred_channel);
     void remove_baro_listener(AP_Baro_Backend* rem_listener);
     Baro_Info *find_baro_node(uint8_t node);
     void update_baro_state(uint8_t node);
@@ -76,7 +78,7 @@ public:
     };
 
     uint8_t register_mag_listener(AP_Compass_Backend* new_listener,
-                                uint8_t preferred_channel);
+                                  uint8_t preferred_channel);
     void remove_mag_listener(AP_Compass_Backend* rem_listener);
     Mag_Info *find_mag_node(uint8_t node);
     void update_mag_state(uint8_t node);
@@ -185,6 +187,8 @@ private:
     };
 
     uavcan::HeapBasedPoolAllocator<UAVCAN_NODE_POOL_BLOCK_SIZE, AP_UAVCAN::RaiiSynchronizer> _node_allocator;
+
+    AP_Int8 _uavcan_node;
 
 public:
     void do_cyclic(void);
