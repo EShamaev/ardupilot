@@ -131,7 +131,7 @@ const AP_Param::GroupInfo AP_BoardConfig::var_info[] = {
 
 #if HAL_WITH_UAVCAN
     // @Group: CAN_
-    // @Path: ../libraries/AP_BoardConfig/AP_BoardConfig.cpp
+    // @Path: ../AP_BoardConfig/AP_BoardConfig.cpp
     AP_SUBGROUPINFO(_var_info_can, "CAN_", 6, AP_BoardConfig, AP_BoardConfig::CAN_var_info),
 #endif
 
@@ -201,7 +201,7 @@ const AP_Param::GroupInfo AP_BoardConfig::CAN_var_info::var_info[] = {
     AP_GROUPINFO("UC_ENABLE", 4, AP_BoardConfig::CAN_var_info, _uavcan_enable, 1),
 
     // @Group: UC_
-    // @Path: ../libraries/AP_UAVCAN/AP_UAVCAN.cpp
+    // @Path: ../AP_UAVCAN/AP_UAVCAN.cpp
     AP_SUBGROUPPTR(_uavcan, "UC_", 5, AP_BoardConfig::CAN_var_info, AP_UAVCAN),
 
     AP_GROUPEND
