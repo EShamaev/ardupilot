@@ -604,7 +604,8 @@ void AP_GPS::update_instance(uint8_t instance)
         return;
     }
 
-    if (drivers[instance] == nullptr || state[instance].status == NO_GPS) {
+    // If it is UAVCAN GNSS - give it regular time as if it is there to acknowledge itself
+    if (drivers[instance] == nullptr || (state[instance].status == NO_GPS && _type[instance] != GPS_TYPE_UAVCAN)) {
         // we don't yet know the GPS type of this one, or it has timed
         // out and needs to be re-initialised
         detect_instance(instance);
