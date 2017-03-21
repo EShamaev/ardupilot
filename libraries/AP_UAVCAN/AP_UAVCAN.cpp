@@ -40,12 +40,12 @@ extern const AP_HAL::HAL& hal;
 
 // table of user settable CAN bus parameters
 const AP_Param::GroupInfo AP_UAVCAN::var_info[] = {
-    // @Param: UAVCAN_NODE
+    // @Param: NODE
     // @DisplayName:  UAVCAN node that is used for Ardupilot
     // @Description: UAVCAN node should be set implicitly
     // @Range: 1 250
     // @User: Advanced
-    AP_GROUPINFO("N", 0, AP_UAVCAN, _uavcan_node, 10),
+    AP_GROUPINFO("NODE", 1, AP_UAVCAN, _uavcan_node, 10),
 
     AP_GROUPEND
 };
