@@ -15,6 +15,7 @@ public:
     // detect the sensor
     static AP_Compass_Backend *detect(Compass &compass);
 
+    // This method is called from UAVCAN thread
     void handle_mag_msg(Vector3f &mag);
 
 private:
@@ -23,4 +24,6 @@ private:
     Vector3f _sum;
     uint32_t _count;
     uint64_t _last_timestamp;
+
+    AP_HAL::Semaphore *_mag_baro;
 };
