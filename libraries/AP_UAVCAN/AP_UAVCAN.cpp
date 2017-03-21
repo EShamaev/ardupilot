@@ -27,6 +27,8 @@
 
 extern const AP_HAL::HAL& hal;
 
+#define debug_uavcan(level, fmt, args...) do { if ((level) <= AP_BoardConfig::get_can_debug()) { hal.console->printf(fmt, ##args); }} while (0)
+
 // Translation of all messages from UAVCAN structures into AP structures is done
 // in AP_UAVCAN and not in corresponding drivers.
 // The overhead of including definitions of DSDL is very high and it is best to
@@ -35,6 +37,18 @@ extern const AP_HAL::HAL& hal;
 // TODO: temperature can come not only from baro. There should be separation on node ID
 // to check where it belongs to. If it is not baro that is the source, separate layer
 // of listeners/nodes should be added.
+
+// table of user settable CAN bus parameters
+const AP_Param::GroupInfo AP_UAVCAN::var_info[] = {
+    // @Param: UAVCAN_NODE
+    // @DisplayName:  UAVCAN node that is used for Ardupilot
+    // @Description: UAVCAN node should be set implicitly
+    // @Range: 1 250
+    // @User: Advanced
+    AP_GROUPINFO("N", 0, AP_UAVCAN, _uavcan_node, 10),
+
+    AP_GROUPEND
+};
 
 static uavcan::Subscriber<uavcan::equipment::gnss::Fix> *gnss_fix;
 static void gnss_fix_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::gnss::Fix>& msg)
@@ -50,8 +64,8 @@ static void gnss_fix_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::g
                 uint64_t epoch_ms = uavcan::UtcTime(msg.gnss_timestamp).toUSec();
                 epoch_ms /= 1000;
                 uint64_t gps_ms = epoch_ms - posix_offset;
-                state->time_week = (uint16_t) (gps_ms / ms_per_week);
-                state->time_week_ms = (uint32_t) (gps_ms - (state->time_week) * ms_per_week);
+                state->time_week = (uint16_t)(gps_ms / ms_per_week);
+                state->time_week_ms = (uint32_t)(gps_ms - (state->time_week) * ms_per_week);
 
                 if (msg.status == uavcan::equipment::gnss::Fix::STATUS_NO_FIX) {
                     state->status = AP_GPS::GPS_Status::NO_FIX;
@@ -177,8 +191,10 @@ static uavcan::Publisher<uavcan::equipment::actuator::ArrayCommand> *act_out_arr
 static uavcan::Publisher<uavcan::equipment::esc::RawCommand> *esc_raw;
 
 AP_UAVCAN::AP_UAVCAN() :
-        _initialized(false), _rco_armed(false), _rco_safety(false), _rc_out_sem(nullptr), _node_allocator(UAVCAN_NODE_POOL_SIZE, UAVCAN_NODE_POOL_SIZE)
+    _initialized(false), _rco_armed(false), _rco_safety(false), _rc_out_sem(nullptr), _node_allocator(UAVCAN_NODE_POOL_SIZE, UAVCAN_NODE_POOL_SIZE)
 {
+    AP_Param::setup_object_defaults(this, var_info);
+
     for (uint8_t i = 0; i < UAVCAN_RCO_NUMBER; i++) {
         _rco_conf[i].active = false;
     }
@@ -210,6 +226,8 @@ AP_UAVCAN::AP_UAVCAN() :
     }
 
     _rc_out_sem = hal.util->new_semaphore();
+
+    debug_uavcan(2, "AP_UAVCAN constructed\n\r");
 }
 
 AP_UAVCAN::~AP_UAVCAN()
@@ -224,7 +242,7 @@ bool AP_UAVCAN::try_init(void)
 
             if (node != nullptr) {
                 if (!node->isStarted()) {
-                    uavcan::NodeID self_node_id(AP_BoardConfig::get_uavcan_node());
+                    uavcan::NodeID self_node_id(_uavcan_node);
                     node->setNodeID(self_node_id);
 
                     uavcan::NodeStatusProvider::NodeName name("org.ardupilot.pixhawk");
@@ -243,53 +261,41 @@ bool AP_UAVCAN::try_init(void)
 
                     const int node_start_res = node->start();
                     if (node_start_res < 0) {
-                        if (AP_BoardConfig::get_can_debug() >= 1) {
-                            hal.console->printf("UAVCAN: node start problem\n\r");
-                        }
+                        debug_uavcan(1, "UAVCAN: node start problem\n\r");
                     }
 
                     gnss_fix = new uavcan::Subscriber<uavcan::equipment::gnss::Fix>(*node);
                     const int gnss_fix_start_res = gnss_fix->start(gnss_fix_cb);
                     if (gnss_fix_start_res < 0) {
-                        if (AP_BoardConfig::get_can_debug() >= 1) {
-                            hal.console->printf("UAVCAN GNSS subscriber start problem\n\r");
-                        }
+                        debug_uavcan(1, "UAVCAN GNSS subscriber start problem\n\r");
                         return false;
                     }
 
                     gnss_aux = new uavcan::Subscriber<uavcan::equipment::gnss::Auxiliary>(*node);
                     const int gnss_aux_start_res = gnss_aux->start(gnss_aux_cb);
                     if (gnss_aux_start_res < 0) {
-                        if (AP_BoardConfig::get_can_debug() >= 1) {
-                            hal.console->printf("UAVCAN GNSS Aux subscriber start problem\n\r");
-                        }
+                        debug_uavcan(1, "UAVCAN GNSS Aux subscriber start problem\n\r");
                         return false;
                     }
 
                     magnetic = new uavcan::Subscriber<uavcan::equipment::ahrs::MagneticFieldStrength>(*node);
                     const int magnetic_start_res = magnetic->start(magnetic_cb);
                     if (magnetic_start_res < 0) {
-                        if (AP_BoardConfig::get_can_debug() >= 1) {
-                            hal.console->printf("UAVCAN Compass subscriber start problem\n\r");
-                        }
+                        debug_uavcan(1, "UAVCAN Compass subscriber start problem\n\r");
                         return false;
                     }
 
                     air_data_sp = new uavcan::Subscriber<uavcan::equipment::air_data::StaticPressure>(*node);
                     const int air_data_sp_start_res = air_data_sp->start(air_data_sp_cb);
                     if (air_data_sp_start_res < 0) {
-                        if (AP_BoardConfig::get_can_debug() >= 1) {
-                            hal.console->printf("UAVCAN Baro subscriber start problem\n\r");
-                        }
+                        debug_uavcan(1, "UAVCAN Baro subscriber start problem\n\r");
                         return false;
                     }
 
                     air_data_st = new uavcan::Subscriber<uavcan::equipment::air_data::StaticTemperature>(*node);
                     const int air_data_st_start_res = air_data_st->start(air_data_st_cb);
                     if (air_data_st_start_res < 0) {
-                        if (AP_BoardConfig::get_can_debug() >= 1) {
-                            hal.console->printf("UAVCAN Temperature subscriber start problem\n\r");
-                        }
+                        debug_uavcan(1, "UAVCAN Temperature subscriber start problem\n\r");
                         return false;
                     }
 
@@ -309,9 +315,7 @@ bool AP_UAVCAN::try_init(void)
 
                     _initialized = true;
 
-                    if (AP_BoardConfig::get_can_debug() >= 1) {
-                        hal.console->printf("UAVCAN: init done\n\r");
-                    }
+                    debug_uavcan(1, "UAVCAN: init done\n\r");
 
                     return true;
                 }
@@ -329,8 +333,8 @@ bool AP_UAVCAN::try_init(void)
 void AP_UAVCAN::rc_out_sem_take()
 {
     bool sem_ret = _rc_out_sem->take(0);
-    if(sem_ret == false && AP_BoardConfig::get_can_debug() >= 1) {
-        hal.console->printf("AP_UAVCAN RCOut semaphore fail\n\r");
+    if (sem_ret == false) {
+        debug_uavcan(1, "AP_UAVCAN RCOut semaphore fail\n\r");
     }
 }
 
@@ -515,9 +519,7 @@ uint8_t AP_UAVCAN::register_gps_listener(AP_GPS_Backend* new_listener, uint8_t p
             _gps_node_taken[_gps_listener_to_node[sel_place]]++;
             ret = preferred_channel;
 
-            if (AP_BoardConfig::get_can_debug() >= 2) {
-                hal.console->printf("reg_GPS place:%d, chan: %d\n\r", sel_place, preferred_channel);
-            }
+            debug_uavcan(2, "reg_GPS place:%d, chan: %d\n\r", sel_place, preferred_channel);
         } else {
             for (uint8_t i = 0; i < AP_UAVCAN_MAX_GPS_NODES; i++) {
                 if (_gps_node_taken[i] == 0) {
@@ -526,9 +528,7 @@ uint8_t AP_UAVCAN::register_gps_listener(AP_GPS_Backend* new_listener, uint8_t p
                     _gps_node_taken[i]++;
                     ret = i + 1;
 
-                    if (AP_BoardConfig::get_can_debug() >= 2) {
-                        hal.console->printf("reg_GPS place:%d, chan: %d\n\r", sel_place, i);
-                    }
+                    debug_uavcan(2, "reg_GPS place:%d, chan: %d\n\r", sel_place, i);
                     break;
                 }
             }
@@ -606,9 +606,7 @@ uint8_t AP_UAVCAN::register_baro_listener(AP_Baro_Backend* new_listener, uint8_t
             _baro_node_taken[_baro_listener_to_node[sel_place]]++;
             ret = preferred_channel;
 
-            if (AP_BoardConfig::get_can_debug() >= 2) {
-                hal.console->printf("reg_Baro place:%d, chan: %d\n\r", sel_place, preferred_channel);
-            }
+            debug_uavcan(2, "reg_Baro place:%d, chan: %d\n\r", sel_place, preferred_channel);
         } else {
             for (uint8_t i = 0; i < AP_UAVCAN_MAX_BARO_NODES; i++) {
                 if (_baro_node_taken[i] == 0) {
@@ -617,9 +615,7 @@ uint8_t AP_UAVCAN::register_baro_listener(AP_Baro_Backend* new_listener, uint8_t
                     _baro_node_taken[i]++;
                     ret = i + 1;
 
-                    if (AP_BoardConfig::get_can_debug() >= 2) {
-                        hal.console->printf("reg_BARO place:%d, chan: %d\n\r", sel_place, i);
-                    }
+                    debug_uavcan(2, "reg_BARO place:%d, chan: %d\n\r", sel_place, i);
                     break;
                 }
             }
@@ -697,9 +693,7 @@ uint8_t AP_UAVCAN::register_mag_listener(AP_Compass_Backend* new_listener, uint8
             _mag_node_taken[_mag_listener_to_node[sel_place]]++;
             ret = preferred_channel;
 
-            if (AP_BoardConfig::get_can_debug() >= 2) {
-                hal.console->printf("reg_Compass place:%d, chan: %d\n\r", sel_place, preferred_channel);
-            }
+            debug_uavcan(2, "reg_Compass place:%d, chan: %d\n\r", sel_place, preferred_channel);
         } else {
             for (uint8_t i = 0; i < AP_UAVCAN_MAX_MAG_NODES; i++) {
                 if (_mag_node_taken[i] == 0) {
@@ -708,9 +702,7 @@ uint8_t AP_UAVCAN::register_mag_listener(AP_Compass_Backend* new_listener, uint8
                     _mag_node_taken[i]++;
                     ret = i + 1;
 
-                    if (AP_BoardConfig::get_can_debug() >= 2) {
-                        hal.console->printf("reg_MAG place:%d, chan: %d\n\r", sel_place, i);
-                    }
+                    debug_uavcan(2, "reg_MAG place:%d, chan: %d\n\r", sel_place, i);
                     break;
                 }
             }
