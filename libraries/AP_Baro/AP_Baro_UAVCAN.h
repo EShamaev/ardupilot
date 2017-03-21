@@ -11,7 +11,7 @@ public:
 
     void update() override;
 
-    // callback for UAVCAN messages
+    // This method is called from UAVCAN thread
     virtual void handle_baro_msg(float pressure, float temperature) override;
 
 private:
@@ -19,4 +19,6 @@ private:
     float _pressure;
     float _temperature;
     uint64_t _last_timestamp;
+
+    AP_HAL::Semaphore *_sem_baro;
 };
