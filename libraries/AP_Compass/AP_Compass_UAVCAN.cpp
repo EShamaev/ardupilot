@@ -34,6 +34,8 @@
 
 extern const AP_HAL::HAL& hal;
 
+#define debug_mag_uavcan(level, fmt, args...) do { if ((level) <= AP_BoardConfig::get_can_debug()) { hal.console->printf(fmt, ##args); }} while (0)
+
 // There is limitation to use only one UAVCAN magnetometer now.
 
 /*
@@ -76,11 +78,11 @@ AP_Compass_UAVCAN::AP_Compass_UAVCAN(Compass &compass):
 
             accumulate();
 
-            if (AP_BoardConfig::get_can_debug() >= 2) {
-                hal.console->printf("AP_Compass_UAVCAN loaded\n\r");
-            }
+            debug_mag_uavcan(2, "AP_Compass_UAVCAN loaded\n\r");
         }
     }
+
+    _mag_baro = hal.util->new_semaphore();
 }
 
 AP_Compass_UAVCAN::~AP_Compass_UAVCAN()
@@ -90,9 +92,7 @@ AP_Compass_UAVCAN::~AP_Compass_UAVCAN()
         if (ap_uavcan != nullptr) {
             ap_uavcan->remove_mag_listener(this);
 
-            if (AP_BoardConfig::get_can_debug() >= 2) {
-                hal.console->printf("AP_Compass_UAVCAN destructed\n\r");
-            }
+            debug_mag_uavcan(2, "AP_Compass_UAVCAN destructed\n\r");
         }
     }
 }
@@ -113,12 +113,16 @@ void AP_Compass_UAVCAN::read(void)
     // avoid division by zero if we haven't received any mag reports
     if (_count == 0) return;
 
-    _sum /= _count;
+    if (_mag_baro->take(0))
+    {
+        _sum /= _count;
 
-    publish_filtered_field(_sum, _instance);
+        publish_filtered_field(_sum, _instance);
 
-    _sum.zero();
-    _count = 0;
+        _sum.zero();
+        _count = 0;
+        _mag_baro->give();
+    }
 }
 
 void AP_Compass_UAVCAN::handle_mag_msg(Vector3f &mag)
@@ -135,9 +139,13 @@ void AP_Compass_UAVCAN::handle_mag_msg(Vector3f &mag)
     // correct raw_field for known errors
     correct_field(raw_field, _instance);
 
-    // accumulate into averaging filter
-    _sum += raw_field;
-    _count++;
+    if (_mag_baro->take(0))
+    {
+        // accumulate into averaging filter
+        _sum += raw_field;
+        _count++;
+        _mag_baro->give();
+    }
 }
 
 #endif
