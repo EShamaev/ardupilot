@@ -36,9 +36,6 @@
 extern const AP_HAL::HAL& hal;
 
 AP_BoardConfig::px4_board_type AP_BoardConfig::px4_configured_board;
-int8_t AP_BoardConfig::px4_can_enable;
-int8_t AP_BoardConfig::px4_can_debug;
-int8_t AP_BoardConfig::px4_uavcan_node;
 
 /* 
  declare driver main entry points
@@ -211,7 +208,7 @@ void AP_BoardConfig::px4_setup_sbus(void)
 void AP_BoardConfig::px4_setup_canbus(void)
 {
 #if HAL_WITH_UAVCAN
-    if (px4.can_enable >= 1) {
+    if (_var_info_can._can_enable >= 1) {
         if(hal.can_mgr == nullptr)
         {
             const_cast <AP_HAL::HAL&> (hal).can_mgr = new PX4::PX4CANDriver;
@@ -219,14 +216,22 @@ void AP_BoardConfig::px4_setup_canbus(void)
 
         if(hal.can_mgr != nullptr)
         {
-            bool initret = hal.can_mgr->begin(px4.can_bitrate, px4.can_enable);
-            if (!initret) {
-                hal.console->printf("Failed to initialize can_mgr\n");
-            } else {
-                hal.console->printf("can_mgr initialized well\n");
+            if(_var_info_can._uavcan_enable > 0)
+            {
+                _var_info_can._uavcan = new AP_UAVCAN;
+                AP_Param::load_object_from_eeprom(_var_info_can._uavcan, AP_UAVCAN::var_info);
 
-                // start UAVCAN working thread
-                hal.scheduler->create_uavcan_thread();
+                hal.can_mgr->set_UAVCAN(_var_info_can._uavcan);
+
+                bool initret = hal.can_mgr->begin(_var_info_can._can_bitrate, _var_info_can._can_enable);
+                if (!initret) {
+                    hal.console->printf("Failed to initialize can_mgr\n");
+                } else {
+                    hal.console->printf("can_mgr initialized well\n");
+
+                    // start UAVCAN working thread
+                    hal.scheduler->create_uavcan_thread();
+                }
             }
         }
     }
@@ -302,11 +307,6 @@ void AP_BoardConfig::px4_setup_drivers(void)
     }
 
     px4_configured_board = (enum px4_board_type)px4.board_type.get();
-#if HAL_WITH_UAVCAN
-    px4_can_enable = (int8_t) px4.can_enable;
-    px4_can_debug = (int8_t) px4.can_debug;
-    px4_uavcan_node = (int8_t) px4.uavcan_node;
-#endif
 
     switch (px4_configured_board) {
     case PX4_BOARD_PX4V1:
