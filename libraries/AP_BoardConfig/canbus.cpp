@@ -43,12 +43,12 @@ const AP_Param::GroupInfo AP_BoardConfig::CAN_var_info::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("DEBUG", 3, AP_BoardConfig::CAN_var_info, _can_debug, 2),
 
-    // @Param: UC_ENABLE
+    // @Param: UC_EN
     // @DisplayName:  Enable use of UAVCAN devices
     // @Description: Enabling this option on a Pixhawk enables UAVCAN devices. Note that this uses about 25k of memory
     // @Values: 0:Disabled,1:Enabled first channel,2:Enabled both channels
     // @User: Advanced
-    AP_GROUPINFO("UC_ENABLE", 4, AP_BoardConfig::CAN_var_info, _uavcan_enable, 1),
+    AP_GROUPINFO("UC_EN", 4, AP_BoardConfig::CAN_var_info, _uavcan_enable, 1),
 
     // @Group: UC_
     // @Path: ../AP_UAVCAN/AP_UAVCAN.cpp
