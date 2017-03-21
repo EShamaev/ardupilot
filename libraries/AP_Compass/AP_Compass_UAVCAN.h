@@ -5,8 +5,7 @@
 
 #include <AP_UAVCAN/AP_UAVCAN.h>
 
-class AP_Compass_UAVCAN : public AP_Compass_Backend
-{
+class AP_Compass_UAVCAN : public AP_Compass_Backend {
 public:
     void        read(void) override;
 

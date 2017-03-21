@@ -111,10 +111,11 @@ AP_Compass_Backend *AP_Compass_UAVCAN::detect(Compass &compass)
 void AP_Compass_UAVCAN::read(void)
 {
     // avoid division by zero if we haven't received any mag reports
-    if (_count == 0) return;
+    if (_count == 0) {
+        return;
+    }
 
-    if (_mag_baro->take(0))
-    {
+    if (_mag_baro->take(0)) {
         _sum /= _count;
 
         publish_filtered_field(_sum, _instance);
@@ -139,8 +140,7 @@ void AP_Compass_UAVCAN::handle_mag_msg(Vector3f &mag)
     // correct raw_field for known errors
     correct_field(raw_field, _instance);
 
-    if (_mag_baro->take(0))
-    {
+    if (_mag_baro->take(0)) {
         // accumulate into averaging filter
         _sum += raw_field;
         _count++;
