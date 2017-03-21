@@ -131,7 +131,7 @@ const AP_Param::GroupInfo AP_BoardConfig::var_info[] = {
 
 #if HAL_WITH_UAVCAN
     // @Group: CAN_
-    // @Path: ../AP_BoardConfig/AP_BoardConfig.cpp
+    // @Path: ../AP_BoardConfig/canbus.cpp
     AP_SUBGROUPINFO(_var_info_can, "CAN_", 6, AP_BoardConfig, AP_BoardConfig::CAN_var_info),
 #endif
 
@@ -170,43 +170,6 @@ const AP_Param::GroupInfo AP_BoardConfig::var_info[] = {
 };
 
 #if HAL_WITH_UAVCAN
-// table of user settable CAN bus parameters
-const AP_Param::GroupInfo AP_BoardConfig::CAN_var_info::var_info[] = {
-    // @Param: ENABLE
-    // @DisplayName:  Enable use of CAN buses
-    // @Description: Enabling this option enables use of CAN buses.
-    // @Values: 0:Disabled,1:Enabled first channel,2:Enabled both channels
-    // @User: Advanced
-    AP_GROUPINFO_FLAGS("ENABLE", 1, AP_BoardConfig::CAN_var_info, _can_enable, 0, AP_PARAM_FLAG_ENABLE),
-
-    // @Param: BITRATE
-    // @DisplayName:  Bitrate of CAN interface
-    // @Description: Bit rate can be set up to from 10000 to 1000000
-    // @Range: 10000 1000000
-    // @User: Advanced
-    AP_GROUPINFO("BITRATE", 2, AP_BoardConfig::CAN_var_info, _can_bitrate, 1000000),
-
-    // @Param: DEBUG
-    // @DisplayName:  Level of debug for CAN devices
-    // @Description: Enabling this option will provide debug messages
-    // @Values: 0:Disabled,1:Major messages,2:All messages
-    // @User: Advanced
-    AP_GROUPINFO("DEBUG", 3, AP_BoardConfig::CAN_var_info, _can_debug, 2),
-
-    // @Param: UC_ENABLE
-    // @DisplayName:  Enable use of UAVCAN devices
-    // @Description: Enabling this option on a Pixhawk enables UAVCAN devices. Note that this uses about 25k of memory
-    // @Values: 0:Disabled,1:Enabled first channel,2:Enabled both channels
-    // @User: Advanced
-    AP_GROUPINFO("UC_ENABLE", 4, AP_BoardConfig::CAN_var_info, _uavcan_enable, 1),
-
-    // @Group: UC_
-    // @Path: ../AP_UAVCAN/AP_UAVCAN.cpp
-    AP_SUBGROUPPTR(_uavcan, "UC_", 5, AP_BoardConfig::CAN_var_info, AP_UAVCAN),
-
-    AP_GROUPEND
-};
-
 int8_t AP_BoardConfig::_st_can_enable;
 int8_t AP_BoardConfig::_st_can_debug;
 #endif
