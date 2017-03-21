@@ -110,7 +110,9 @@ public:
 private:
     AP_Int16 vehicleSerialNumber;
 
+#if HAL_WITH_UAVCAN
     CAN_var_info _var_info_can;
+#endif
 
 #if CONFIG_HAL_BOARD == HAL_BOARD_PX4 || CONFIG_HAL_BOARD == HAL_BOARD_VRBRAIN
     struct {
