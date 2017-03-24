@@ -366,7 +366,7 @@ void AP_UAVCAN::do_cyclic(void)
                     uavcan::equipment::actuator::Command cmd;
 
                     if (_rco_conf[i].active && ((((uint32_t) 1) << i) & _servo_bm)) {
-                        cmd.actuator_id = i;
+                        cmd.actuator_id = i + 1;
 
                         // TODO: other types
                         cmd.command_type = uavcan::equipment::actuator::Command::COMMAND_TYPE_UNITLESS;
