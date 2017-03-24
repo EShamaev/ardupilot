@@ -88,7 +88,7 @@ static void gnss_fix_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::g
 
                 Vector3f vel(msg.ned_velocity[0], msg.ned_velocity[1], msg.ned_velocity[2]);
                 state->velocity = vel;
-                state->ground_speed = norm(vel.x + vel.y);
+                state->ground_speed = norm(vel.x, vel.y);
                 state->ground_course = wrap_360(degrees(atan2f(vel.y, vel.x)));
 
                 float pos_cov[9];
