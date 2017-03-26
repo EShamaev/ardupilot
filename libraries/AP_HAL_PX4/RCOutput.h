@@ -2,7 +2,6 @@
 
 #include "AP_HAL_PX4.h"
 #include <systemlib/perf_counter.h>
-#include <uORB/topics/actuator_outputs.h>
 #include <uORB/topics/actuator_armed.h>
 
 #define PX4_NUM_OUTPUT_CHANNELS 16
@@ -52,19 +51,13 @@ private:
     unsigned _alt_servo_count;
     uint32_t _rate_mask;
     uint16_t _enabled_channels;
-    struct {
-        int pwm_sub;
-        actuator_outputs_s outputs;
-    } _outputs[ORB_MULTI_MAX_INSTANCES] {};
     actuator_armed_s _armed;
 
-    orb_advert_t _actuator_direct_pub = nullptr;
     orb_advert_t _actuator_armed_pub = nullptr;
     uint16_t _esc_pwm_min = 0;
     uint16_t _esc_pwm_max = 0;
 
     void _init_alt_channels(void);
-    void _publish_actuators(void);
     void _arm_actuators(bool arm);
     void set_freq_fd(int fd, uint32_t chmask, uint16_t freq_hz);
     bool _corking;
