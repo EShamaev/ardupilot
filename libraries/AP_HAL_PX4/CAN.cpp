@@ -968,10 +968,9 @@ bool PX4CANDriver::begin(uint32_t bitrate, uint8_t can_number)
     if (init(bitrate, PX4CAN::OperatingMode::NormalMode, can_number) >= 0) {
         initialized_ = true;
 
-        //        if (p_uavcan == UAVCAN_NULLPTR) {
-        //            p_uavcan = new AP_UAVCAN;
         if (p_uavcan != UAVCAN_NULLPTR) {
             uint16_t UAVCAN_init_tries;
+
             // TODO: Something
             for (UAVCAN_init_tries = 0; UAVCAN_init_tries < 100; UAVCAN_init_tries++) {
                 if (p_uavcan->try_init() == true) {
