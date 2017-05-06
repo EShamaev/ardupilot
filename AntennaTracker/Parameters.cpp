@@ -293,6 +293,10 @@ const AP_Param::Info Tracker::var_info[] = {
     // @Path: ../libraries/AP_BoardConfig/AP_BoardConfig.cpp
     GOBJECT(BoardConfig,            "BRD_",       AP_BoardConfig),
 
+    // @Group: CAN_
+    // @Path: ../libraries/AP_BoardConfig/AP_BoardConfig_CAN.cpp
+    GOBJECT(BoardConfig_CAN,        "CAN_",       AP_BoardConfig_CAN),
+
     // GPS driver
     // @Group: GPS_
     // @Path: ../libraries/AP_GPS/AP_GPS.cpp

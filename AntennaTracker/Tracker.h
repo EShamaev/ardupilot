@@ -58,6 +58,7 @@
 #include <AP_Airspeed/AP_Airspeed.h>
 #include <RC_Channel/RC_Channel.h>
 #include <AP_BoardConfig/AP_BoardConfig.h>
+#include <AP_BoardConfig/AP_BoardConfig_CAN.h>
 #include <AP_OpticalFlow/AP_OpticalFlow.h>
 #include <AP_RangeFinder/AP_RangeFinder.h>
 #include <AP_Beacon/AP_Beacon.h>
@@ -144,6 +145,10 @@ private:
     GCS &gcs() { return _gcs; }
 
     AP_BoardConfig BoardConfig;
+
+    // board specific config for CAN bus
+    AP_BoardConfig_CAN BoardConfig_CAN;
+
 
     struct Location current_loc;
 
