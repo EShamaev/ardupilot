@@ -4,6 +4,7 @@
 
 #include "AP_Baro_UAVCAN.h"
 #include <AP_BoardConfig/AP_BoardConfig.h>
+#include <AP_BoardConfig/AP_BoardConfig_CAN.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -12,7 +13,7 @@
 
 extern const AP_HAL::HAL& hal;
 
-#define debug_baro_uavcan(level, fmt, args...) do { if ((level) <= AP_BoardConfig::get_can_debug()) { hal.console->printf(fmt, ##args); }} while (0)
+#define debug_baro_uavcan(level, fmt, args...) do { if ((level) <= AP_BoardConfig_CAN::get_can_debug()) { hal.console->printf(fmt, ##args); }} while (0)
 
 // There is limitation to use only one UAVCAN barometer now.
 
@@ -22,29 +23,18 @@ extern const AP_HAL::HAL& hal;
 AP_Baro_UAVCAN::AP_Baro_UAVCAN(AP_Baro &baro) :
     AP_Baro_Backend(baro)
 {
-    _instance = _frontend.register_sensor();
-    if (hal.can_mgr != nullptr) {
-        AP_UAVCAN *ap_uavcan = hal.can_mgr->get_UAVCAN();
-        if (ap_uavcan != nullptr) {
-            // Give time to receive some packets from CAN if baro sensor is present
-            // This way it will get calibrated correctly
-            hal.scheduler->delay(1000);
-            ap_uavcan->register_baro_listener(this, 1);
-
-            debug_baro_uavcan(2, "AP_Baro_UAVCAN loaded\n\r");
-        }
-    }
-
     _sem_baro = hal.util->new_semaphore();
 }
 
 AP_Baro_UAVCAN::~AP_Baro_UAVCAN()
 {
-    if (hal.can_mgr != nullptr) {
-        AP_UAVCAN *ap_uavcan = hal.can_mgr->get_UAVCAN();
-        if (ap_uavcan != nullptr) {
-            ap_uavcan->remove_baro_listener(this);
-            debug_baro_uavcan(2, "AP_Baro_UAVCAN destructed\n\r");
+    if (_initialized) {
+        if (hal.can_mgr[_manager] != nullptr) {
+            AP_UAVCAN *ap_uavcan = hal.can_mgr[_manager]->get_UAVCAN();
+            if (ap_uavcan != nullptr) {
+                ap_uavcan->remove_baro_listener(this);
+                debug_baro_uavcan(2, "AP_Baro_UAVCAN destructed\n\r");
+            }
         }
     }
 }
@@ -68,6 +58,30 @@ void AP_Baro_UAVCAN::handle_baro_msg(float pressure, float temperature)
         _last_timestamp = AP_HAL::micros64();
         _sem_baro->give();
     }
+}
+
+bool AP_Baro_UAVCAN::register_uavcan_baro(uint8_t mgr, uint8_t node)
+{
+    if (hal.can_mgr[mgr] != nullptr) {
+        AP_UAVCAN *ap_uavcan = hal.can_mgr[mgr]->get_UAVCAN();
+
+        if (ap_uavcan != nullptr) {
+            _manager = mgr;
+            _node = node;
+
+            if (ap_uavcan->register_baro_listener_to_node(this, node))
+            {
+                _instance = _frontend.register_sensor();
+                debug_baro_uavcan(2, "AP_Baro_UAVCAN loaded\n\r");
+
+                _initialized = true;
+
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 #endif // HAL_WITH_UAVCAN

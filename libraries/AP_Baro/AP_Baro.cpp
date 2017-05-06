@@ -25,6 +25,7 @@
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Math/AP_Math.h>
 #include <AP_BoardConfig/AP_BoardConfig.h>
+#include <AP_BoardConfig/AP_BoardConfig_CAN.h>
 #include <AP_Vehicle/AP_Vehicle_Type.h>
 
 #include "AP_Baro_SITL.h"
@@ -481,14 +482,14 @@ void AP_Baro::init(void)
     }
     
 #if HAL_WITH_UAVCAN
-    // If there is place left - allocate one UAVCAN based baro
-    if ((AP_BoardConfig::get_can_enable() != 0) && (hal.can_mgr != nullptr))
-    {
-        if(_num_drivers < BARO_MAX_DRIVERS && _num_sensors < BARO_MAX_INSTANCES)
-        {
-            printf("Creating AP_Baro_UAVCAN\n\r");
-            drivers[_num_drivers] = new AP_Baro_UAVCAN(*this);
-            _num_drivers++;
+    if (AP_BoardConfig_CAN::get_can_enable() != 0) {
+        for(uint8_t i = 0; i < MAX_NUMBER_OF_CAN_DRIVERS; i++) {
+            if (hal.can_mgr[i] != nullptr) {
+                AP_UAVCAN *uavcan = hal.can_mgr[i]->get_UAVCAN();
+                if (uavcan != nullptr) {
+                    uavcan->set_baro(this);
+                }
+            }
         }
     }
 #endif
@@ -616,4 +617,45 @@ void AP_Baro::set_pressure_correction(uint8_t instance, float p_correction)
     if (instance < _num_sensors) {
         sensors[instance].p_correction = p_correction;
     }
+}
+
+/*
+ * register new baro if there is space for it
+ */
+bool AP_Baro::register_uavcan_baro(uint8_t mgr, uint8_t node)
+{
+#if HAL_WITH_UAVCAN
+    // Check if this node in network is already registered
+    for (uint8_t i = 0; i < _num_drivers; i++) {
+        if (sensors[i].can_manager == mgr && sensors[i].uavcan_node == node) {
+            return true;
+        }
+    }
+
+    // If there is place left - allocate one UAVCAN based baro
+    if (_num_drivers < BARO_MAX_DRIVERS && _num_sensors < BARO_MAX_INSTANCES)
+    {
+        if ((AP_BoardConfig_CAN::get_can_enable() != 0) && (hal.can_mgr[mgr] != nullptr))
+        {
+            drivers[_num_drivers] = new AP_Baro_UAVCAN(*this);
+
+            if (((AP_Baro_UAVCAN *) drivers[_num_drivers])->register_uavcan_baro(mgr, node)) {
+
+                sensors[_num_drivers].can_manager = mgr;
+                sensors[_num_drivers].uavcan_node = node;
+
+                _num_drivers++;
+
+                return true;
+            } else
+            {
+                delete drivers[_num_drivers];
+
+                return false;
+            }
+        }
+    }
+#endif
+
+    return false;
 }
