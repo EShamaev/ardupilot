@@ -138,6 +138,7 @@ void Plane::init_ardupilot()
 
     // setup any board specific drivers
     BoardConfig.init();
+    BoardConfig_CAN.init();
 
     relay.init();
 
