@@ -31,6 +31,7 @@ void Sub::init_ardupilot()
     load_parameters();
 
     BoardConfig.init();
+    BoardConfig_CAN.init();
 
     // initialise serial port
     serial_manager.init();
