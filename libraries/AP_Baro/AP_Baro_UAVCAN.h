@@ -13,11 +13,17 @@ public:
     // This method is called from UAVCAN thread
     virtual void handle_baro_msg(float pressure, float temperature) override;
 
+    bool register_uavcan_baro(uint8_t mgr, uint8_t node);
+
 private:
     uint8_t _instance;
     float _pressure;
     float _temperature;
     uint64_t _last_timestamp;
+    uint8_t _manager;
+    uint8_t _node;
+
+    bool _initialized;
 
     AP_HAL::Semaphore *_sem_baro;
 };

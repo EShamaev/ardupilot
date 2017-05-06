@@ -155,6 +155,9 @@ public:
     // set a pressure correction from AP_TempCalibration
     void set_pressure_correction(uint8_t instance, float p_correction);
     
+    // register new baro if there is space for it
+    bool register_uavcan_baro(uint8_t mgr, uint8_t node);
+
 private:
     // how many drivers do we have?
     uint8_t _num_drivers;
@@ -177,6 +180,8 @@ private:
         float altitude;                 // calculated altitude
         AP_Float ground_pressure;
         float p_correction;
+        uint8_t can_manager;
+        uint8_t uavcan_node;
     } sensors[BARO_MAX_INSTANCES];
 
     AP_Float                            _alt_offset;
