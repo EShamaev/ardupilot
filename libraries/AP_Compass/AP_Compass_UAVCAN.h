@@ -12,6 +12,8 @@ public:
     AP_Compass_UAVCAN(Compass &compass);
     ~AP_Compass_UAVCAN() override;
 
+    bool register_uavcan_compass(uint8_t mgr, uint8_t node);
+
     // This method is called from UAVCAN thread
     void handle_mag_msg(Vector3f &mag);
 
@@ -21,6 +23,10 @@ private:
     Vector3f _sum;
     uint32_t _count;
     uint64_t _last_timestamp;
+
+    bool _initialized;
+    uint8_t _manager;
+    uint8_t _node;
 
     AP_HAL::Semaphore *_mag_baro;
 };

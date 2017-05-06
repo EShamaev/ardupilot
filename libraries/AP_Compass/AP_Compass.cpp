@@ -18,6 +18,7 @@
 #include "AP_Compass_LIS3MDL.h"
 #include "AP_Compass_AK09916.h"
 #if HAL_WITH_UAVCAN
+#include <AP_BoardConfig/AP_BoardConfig_CAN.h>
 #include "AP_Compass_UAVCAN.h"
 #endif
 #include "AP_Compass.h"
@@ -689,13 +690,31 @@ void Compass::_detect_backends(void)
 #endif
 
 #if HAL_WITH_UAVCAN
-    if ((AP_BoardConfig::get_can_enable() != 0) && (hal.can_mgr != nullptr))
-    {
-        if((_backend_count < COMPASS_MAX_BACKEND) && (_compass_count < COMPASS_MAX_INSTANCES))
-        {
-            printf("Creating AP_Compass_UAVCAN\n\r");
-            _backends[_backend_count] = new AP_Compass_UAVCAN(*this);
-            _backend_count++;
+    if (AP_BoardConfig_CAN::get_can_enable() != 0) {
+        hal.scheduler->delay(2000);
+
+        for (uint8_t i = 0; i < MAX_NUMBER_OF_CAN_DRIVERS; i++) {
+            if (hal.can_mgr[i] != nullptr) {
+                bool added;
+
+                do {
+                    added = false;
+
+                    AP_UAVCAN *uavcan = hal.can_mgr[i]->get_UAVCAN();
+
+                    if (uavcan != nullptr) {
+                        uint8_t freemag = uavcan->find_smallest_free_mag_node();
+
+                        if (freemag != 255 && (_backend_count < COMPASS_MAX_BACKEND) && (_compass_count < COMPASS_MAX_INSTANCES)) {
+                            _backends[_backend_count] = new AP_Compass_UAVCAN(*this);
+                            ((AP_Compass_UAVCAN*) _backends[_backend_count])->register_uavcan_compass(i, freemag);
+                            _backend_count++;
+
+                            added = true;
+                        }
+                    }
+                } while (added);
+            }
         }
     }
 #endif
