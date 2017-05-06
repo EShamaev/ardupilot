@@ -389,6 +389,7 @@ protected:
     AP_Int16 _delay_ms[GPS_MAX_RECEIVERS];
     AP_Int8 _blend_mask;
     AP_Float _blend_tc;
+    AP_Int8 _uavcan_ch;
 
 private:
     // return gps update rate in milliseconds
