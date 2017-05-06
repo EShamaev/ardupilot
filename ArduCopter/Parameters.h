@@ -55,6 +55,7 @@ public:
         k_param_NavEKF2,
         k_param_g2, // 2nd block of parameters
         k_param_NavEKF3,
+        k_param_BoardConfig_CAN,
 
         // simulation
         k_param_sitl = 10,
@@ -92,6 +93,8 @@ public:
         k_param_log_last_filenumber,            // *** Deprecated - remove
                                                 // with next eeprom number
                                                 // change
+
+
         k_param_toy_yaw_rate,                   // deprecated - remove
         k_param_crosstrack_min_distance,	// deprecated - remove with next eeprom number change
         k_param_rssi_pin,                   // unused, replaced by rssi_ library parameters
