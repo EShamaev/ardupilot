@@ -107,6 +107,7 @@ void Rover::init_ardupilot()
     hal.scheduler->register_delay_callback(mavlink_delay_cb_static, 5);
 
     BoardConfig.init();
+    BoardConfig_CAN.init();
 
     // initialise notify system
     notify.init(false);
