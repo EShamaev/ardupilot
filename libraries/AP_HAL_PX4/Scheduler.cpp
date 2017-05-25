@@ -428,9 +428,13 @@ void *PX4Scheduler::_uavcan_thread(void *arg)
     }
 
     while (!_px4_thread_should_exit) {
-        if (((PX4CANManager *)hal.can_mgr[uavcan_number])->is_initialized()) {
-            if (((PX4CANManager *)hal.can_mgr[uavcan_number])->get_UAVCAN() != nullptr) {
-                (((PX4CANManager *)hal.can_mgr[uavcan_number])->get_UAVCAN())->do_cyclic();
+        if (hal.can_mgr[uavcan_number] != nullptr) {
+            if (((PX4CANManager *)hal.can_mgr[uavcan_number])->is_initialized()) {
+                if (((PX4CANManager *)hal.can_mgr[uavcan_number])->get_UAVCAN() != nullptr) {
+                    (((PX4CANManager *)hal.can_mgr[uavcan_number])->get_UAVCAN())->do_cyclic();
+                } else {
+                    sched->delay_microseconds_semaphore(10000);
+                }
             } else {
                 sched->delay_microseconds_semaphore(10000);
             }
