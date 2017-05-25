@@ -19,6 +19,8 @@
 
 #include <uavcan/helpers/heap_based_pool_allocator.hpp>
 
+#include <AP_AHRS/AP_AHRS.h>
+
 #ifndef UAVCAN_NODE_POOL_SIZE
 #define UAVCAN_NODE_POOL_SIZE 8192
 #endif
@@ -41,6 +43,9 @@
 
 #define AP_UAVCAN_HW_VERS_MAJOR 1
 #define AP_UAVCAN_HW_VERS_MINOR 0
+
+#define AP_UAVCAN_BROADCAST_POSITION    1
+#define AP_UAVCAN_BROADCAST_ATTITUDE    2
 
 class AP_UAVCAN {
 public:
@@ -100,6 +105,14 @@ public:
     bool rc_out_sem_take();
     void rc_out_sem_give();
 
+    // synchronization for GNSS fix output
+    bool fix_out_sem_take();
+    void fix_out_sem_give();
+
+    // synchronization for attitude output
+    bool att_out_sem_take();
+    void att_out_sem_give();
+
 private:
     // ------------------------- GPS
     // 255 - means free node
@@ -141,6 +154,8 @@ private:
     uint8_t _rco_safety;
 
     AP_HAL::Semaphore *_rc_out_sem;
+    AP_HAL::Semaphore *_fix_out_sem;
+    AP_HAL::Semaphore *_att_out_sem;
 
     class SystemClock: public uavcan::ISystemClock, uavcan::Noncopyable {
         SystemClock()
@@ -206,6 +221,10 @@ private:
 
     AP_HAL::CANManager* _parent_can_mgr;
 
+    AP_Int16 _broadcast_bm;
+    AP_Int8 _broadcast_fix_rate;
+    AP_Int8 _broadcast_att_rate;
+
 public:
     void do_cyclic(void);
     bool try_init(void);
@@ -226,6 +245,8 @@ public:
     {
         _parent_can_mgr = parent_can_mgr;
     }
+
+    void UAVCAN_AHRS_update(const AP_AHRS_NavEKF &ahrs);
 };
 
 #endif /* AP_UAVCAN_H_ */
