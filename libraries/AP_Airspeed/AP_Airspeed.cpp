@@ -202,7 +202,8 @@ const AP_Param::GroupInfo AP_Airspeed::var_info[] = {
     AP_GROUPEND
 };
 
-AP_Airspeed::AP_Airspeed()
+AP_Airspeed::AP_Airspeed(const AP_Vehicle::FixedWing &parms)
+        : aparm(parms)
 {
     for (uint8_t i=0; i<AIRSPEED_MAX_SENSORS; i++) {
         state[i].EAS2TAS = 1;
@@ -476,10 +477,22 @@ void AP_Airspeed::read(void)
         // If there are two sensors then the first check will be true for both, however
         // the second check will be true only for the sensor which really failed
         for (uint8_t i = 0; i < AIRSPEED_MAX_SENSORS; i++) {
-            if (state[i].blend_healthy &&
-                    ekf_sensor_airspeed_diff[i] > airspeed_avg_limit && state[i].airspeed > AIRSPEED_BLEND_MIN_SPEED) {
-                gcs().send_text(MAV_SEVERITY_INFO, "Airspeed[%u] sensor blending unhealthy", i);
-                state[i].blend_healthy = false;
+            if (!state[i].blend_healthy ||
+                airspeed_ekf < (aparm.airspeed_min * 0.5)) {
+                continue;
+            }
+            
+            if (ekf_sensor_airspeed_diff[i] > airspeed_avg_limit) {
+                if (state[i].blend_health_decision_delay < AIRSPEED_BLEND_DECISION_DELAY) {
+                    state[i].blend_health_decision_delay++;
+                } else {
+                    gcs().send_text(MAV_SEVERITY_INFO, "Airspeed[%u] sensor blending unhealthy", i);
+                    state[i].blend_healthy = false;
+                }
+            } else {
+                if (state[i].blend_health_decision_delay > 0) {
+                    state[i].blend_health_decision_delay--;
+                }
             }
         }
         
@@ -538,11 +551,25 @@ void AP_Airspeed::read(void)
     
     // Check if any unhealthy sensors came back into range
     for (uint8_t i = 0; i < AIRSPEED_MAX_SENSORS; i++) {
-        if (!state[i].blend_healthy && ekf_sensor_airspeed_diff[i] < AIRSPEED_BLEND_ABS_DIFF_LIMIT &&
-            state[i].airspeed > AIRSPEED_BLEND_MIN_SPEED && state[i].healthy)
+        if (state[i].blend_healthy ||
+            airspeed_ekf < (aparm.airspeed_min * 0.5)) {
+            continue;
+        }
+        
+        if (ekf_sensor_airspeed_diff[i] < AIRSPEED_BLEND_ABS_DIFF_LIMIT &&
+            state[i].healthy)
         {
-            gcs().send_text(MAV_SEVERITY_INFO, "Airspeed[%u] sensor blending back healthy", i);
-            state[i].blend_healthy = true;
+            if (state[i].blend_health_decision_delay > 0) {
+                state[i].blend_health_decision_delay--;
+            } else {
+                gcs().send_text(MAV_SEVERITY_INFO, "Airspeed[%u] sensor blending back healthy", i);
+                state[i].blend_healthy = true;
+            }
+        } else
+        {
+            if (state[i].blend_health_decision_delay < AIRSPEED_BLEND_DECISION_DELAY) {
+                state[i].blend_health_decision_delay++;
+            }
         }
     }
 }

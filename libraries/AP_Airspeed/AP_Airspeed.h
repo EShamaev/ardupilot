@@ -5,16 +5,16 @@
 #include <AP_Param/AP_Param.h>
 #include <GCS_MAVLink/GCS_MAVLink.h>
 #include <AP_Baro/AP_Baro.h>
+#include <AP_Vehicle/AP_Vehicle.h>
 
 class AP_Airspeed_Backend;
 class AP_AHRS;
 
 #define AIRSPEED_MAX_SENSORS 2
 
- // set the limit to 40% (TBD)
 #define AIRSPEED_BLEND_DIFF_LIMIT 0.4
-#define AIRSPEED_BLEND_MIN_SPEED 5.0
 #define AIRSPEED_BLEND_ABS_DIFF_LIMIT 5.0
+#define AIRSPEED_BLEND_DECISION_DELAY 10
 
 class Airspeed_Calibration {
 public:
@@ -44,7 +44,7 @@ public:
     friend class AP_Airspeed_Backend;
     
     // constructor
-    AP_Airspeed();
+    AP_Airspeed(const AP_Vehicle::FixedWing &parms);
 
     void init(void);
 
@@ -308,6 +308,8 @@ private:
         Airspeed_Calibration calibration;
         float last_saved_ratio;
         uint8_t counter;
+        
+        uint8_t blend_health_decision_delay;
     } state[AIRSPEED_MAX_SENSORS];
     
     struct blend_state_t {
@@ -336,4 +338,6 @@ private:
     void process_no_blend(void);
     
     AP_Airspeed_Backend *sensor[AIRSPEED_MAX_SENSORS];
+    
+    const AP_Vehicle::FixedWing &aparm;
 };
