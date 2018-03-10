@@ -23,6 +23,9 @@
 #include <AP_HAL/AP_HAL.h>
 #include <AP_BoardConfig/AP_BoardConfig.h>
 #include <GCS_MAVLink/GCS_Dummy.h>
+#include <AP_Vehicle/AP_Vehicle.h>
+
+AP_Vehicle::FixedWing aparm;
 
 void setup();
 void loop();
@@ -31,7 +34,7 @@ const AP_HAL::HAL& hal = AP_HAL::get_HAL();
 
 float temperature;
 
-AP_Airspeed airspeed;
+AP_Airspeed airspeed{aparm};
 static AP_BoardConfig board_config;
 
 namespace {
