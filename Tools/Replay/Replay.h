@@ -67,7 +67,7 @@ public:
     NavEKF3 EKF3{&ahrs, rng};
     AP_AHRS_NavEKF ahrs{EKF2, EKF3};
     AP_Vehicle::FixedWing aparm;
-    AP_Airspeed airspeed;
+    AP_Airspeed airspeed{aparm};
     AP_Int32 unused; // logging is magic for Replay; this is unused
     DataFlash_Class dataflash{"Replay v0.1", unused};
 
