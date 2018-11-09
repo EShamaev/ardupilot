@@ -7,6 +7,7 @@
 #include <AP_Baro/AP_Baro.h>
 
 class AP_Airspeed_Backend;
+class DataFlash_Class;
 
 #define AIRSPEED_MAX_SENSORS 2
 
@@ -38,12 +39,12 @@ public:
     friend class AP_Airspeed_Backend;
     
     // constructor
-    AP_Airspeed();
+    AP_Airspeed(DataFlash_Class &dataflash);
 
     void init(void);
 
     // read the analog source and update airspeed
-    void read(void);
+    void update(bool log);
 
     // calibrate the airspeed. This must be called on startup if the
     // altitude/climb_rate/acceleration interfaces are ever used
@@ -226,4 +227,6 @@ private:
     void update_calibration(uint8_t i, const Vector3f &vground, int16_t max_airspeed_allowed_during_cal);
 
     AP_Airspeed_Backend *sensor[AIRSPEED_MAX_SENSORS];
+    
+    DataFlash_Class &_dataflash;
 };
