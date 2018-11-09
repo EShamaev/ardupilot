@@ -29,8 +29,9 @@ void loop();
 const AP_HAL::HAL& hal = AP_HAL::get_HAL();
 
 float temperature;
-
-AP_Airspeed airspeed;
+AP_Int32 unused32;
+DataFlash_Class dataflash{unused32};
+AP_Airspeed airspeed{dataflash};
 static AP_BoardConfig board_config;
 
 namespace {
