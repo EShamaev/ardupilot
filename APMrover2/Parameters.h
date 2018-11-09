@@ -281,7 +281,7 @@ public:
  */
 class ParametersG2 {
 public:
-    ParametersG2();
+    ParametersG2(void);
 
     // var_info for holding Parameter information
     static const struct AP_Param::GroupInfo var_info[];
