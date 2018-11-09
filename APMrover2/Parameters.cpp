@@ -696,7 +696,7 @@ ParametersG2::ParametersG2(void)
     follow(),
     rally(rover.ahrs),
     windvane(),
-    airspeed()
+    airspeed(rover.DataFlash)
 {
     AP_Param::setup_object_defaults(this, var_info);
 }

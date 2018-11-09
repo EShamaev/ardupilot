@@ -5,6 +5,7 @@
 #include "RC_Channel.h"
 #include "AC_Sprayer/AC_Sprayer.h"
 #include "AP_Rally.h"
+#include <DataFlash/DataFlash.h>
 
 // Global parameter class.
 //
