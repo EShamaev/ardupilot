@@ -66,7 +66,7 @@ void loop(void)
     static uint32_t timer;
     if ((AP_HAL::millis() - timer) > 100) {
         timer = AP_HAL::millis();
-        airspeed.read();
+        airspeed.update(false);
         airspeed.get_temperature(temperature);
 
         hal.console->printf("airspeed %5.2f temperature %6.2f healthy = %u\n",
