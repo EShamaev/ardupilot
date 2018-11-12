@@ -409,7 +409,7 @@ private:
     uint32_t control_sensors_health;
  
     // Airspeed Sensors
-    AP_Airspeed airspeed{DataFlash};
+    AP_Airspeed airspeed;
 
     // ACRO controller state
     struct {
