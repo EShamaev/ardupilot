@@ -205,8 +205,7 @@ const AP_Param::GroupInfo AP_Airspeed::var_info[] = {
  */
 #define SCALING_OLD_CALIBRATION 819 // 4095/5
 
-AP_Airspeed::AP_Airspeed(DataFlash_Class &dataflash)
-    : _dataflash(dataflash)
+AP_Airspeed::AP_Airspeed(void)
 {
     for (uint8_t i=0; i<AIRSPEED_MAX_SENSORS; i++) {
         state[i].EAS2TAS = 1;
@@ -429,7 +428,10 @@ void AP_Airspeed::update(bool log)
 #endif
 
     if (log) {
-        _dataflash.Log_Write_Airspeed(*this);
+        DataFlash_Class *_dataflash = DataFlash_Class::instance();
+        if (_dataflash != nullptr) {
+            _dataflash.Log_Write_Airspeed(*this);
+        }
     }
 
     // setup primary

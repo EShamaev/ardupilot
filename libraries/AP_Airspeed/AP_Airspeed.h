@@ -7,7 +7,6 @@
 #include <AP_Baro/AP_Baro.h>
 
 class AP_Airspeed_Backend;
-class DataFlash_Class;
 
 #define AIRSPEED_MAX_SENSORS 2
 
@@ -39,7 +38,7 @@ public:
     friend class AP_Airspeed_Backend;
     
     // constructor
-    AP_Airspeed(DataFlash_Class &dataflash);
+    AP_Airspeed(void);
 
     void init(void);
 
@@ -227,6 +226,4 @@ private:
     void update_calibration(uint8_t i, const Vector3f &vground, int16_t max_airspeed_allowed_during_cal);
 
     AP_Airspeed_Backend *sensor[AIRSPEED_MAX_SENSORS];
-    
-    DataFlash_Class &_dataflash;
 };
