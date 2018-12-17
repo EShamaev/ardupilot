@@ -234,7 +234,7 @@ public:
         // Battery monitoring parameters
         //
         k_param_battery = 166,
-        k_param_rssi_pin,               // unused, replaced by rssi_ library parameters - 167
+        k_param_rssi_pin,               // unused, replaced by rssi_ library parameters - 167               
         k_param_battery_volt_pin,       // unused - 168
         k_param_battery_curr_pin,       // unused - 169
 
@@ -530,6 +530,9 @@ public:
     SoaringController soaring_controller;
 #endif
 
+    //LQR_Control parameters
+    AP_LQR_Control lqr_control;
+    
     // dual motor tailsitter rudder to differential thrust scaling: 0-100%
     AP_Int8 rudd_dt_gain;
 
