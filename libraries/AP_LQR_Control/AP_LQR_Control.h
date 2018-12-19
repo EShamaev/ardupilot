@@ -110,8 +110,6 @@ private:
     // maximum allowed lateral acceleration
     AP_Int16 _max_latacc;
 
-    AP_Int16 _tar_speed;
-
     uint32_t _last_update_waypoint_us;
     bool _data_is_stale = true;
 
