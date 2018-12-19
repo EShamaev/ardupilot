@@ -17,7 +17,7 @@ const AP_Param::GroupInfo AP_LQR_Control::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO_FRAME("LIM_BANK",   1, AP_LQR_Control, _loiter_bank_limit, 0.0f, AP_PARAM_FRAME_PLANE),
 
-    // @Param: LQR_MAX_XTRACK
+    // @Param: MAX_XTRACK
     // @DisplayName: LQR maximum allowed Crosstrack error
     // @Description: Maximum allowed crosstrack error(in centimeters) for LQR. A very small value can lead to high frequency of oscillations. A very large value leads to slow convergence to expected path.
     // @Range: 400 10000
@@ -26,7 +26,7 @@ const AP_Param::GroupInfo AP_LQR_Control::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("MAX_XTRCK",   2, AP_LQR_Control, _max_xtrack, 2000),
 
-    // @Param: LQR_Q2_VAL
+    // @Param: Q2_VAL
     // @DisplayName: LQR VALUE of Q2
     // @Description: The value of Q2 to be used. Divided by 100 before use.
     // @Range: 1 10000
@@ -34,7 +34,7 @@ const AP_Param::GroupInfo AP_LQR_Control::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("Q2_VAL",   3, AP_LQR_Control, _q2_val, 100),
 
-    // @Param: LQR_XTRACK_FACTOR
+    // @Param: XTRACK_FACTOR
     // @DisplayName: LQR XTRACK Error weightage in acceleration.
     // @Description: The affect of Xtrackk error on lateral acceleration. Default is 100. Divided by 100 before use.
     // @Range: 10 1000
@@ -42,7 +42,7 @@ const AP_Param::GroupInfo AP_LQR_Control::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("XTR_FAC",   4, AP_LQR_Control, _xtrack_fac, 100),
 
-    // @Param: LQR_VELOCITY_FACTOR
+    // @Param: VELOCITY_FACTOR
     // @DisplayName: Weightage of rate of change of Xtrack in acceleration.
     // @Description: The affect of rate of change of Xtrackk error on lateral acceleration. Default is 150. Divided by 100 before use.
     // @Range: 10 1000
@@ -50,7 +50,7 @@ const AP_Param::GroupInfo AP_LQR_Control::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("VEL_FAC",   5, AP_LQR_Control, _vel_fac, 150),
 
-    // @Param: LQR_MAX_LATACC
+    // @Param: MAX_LATACC
     // @DisplayName: LQR maximum allowed lateral acceleration
     // @Description: Maximum allowed lateral acceleration(in centimeters/sec sqaure) for LQR. A very small value can lead to slow turning and higher overshoots. A very large value leads to very small turning radius causing unstable roll and yaw throws.
     // @Range: 0 10000
@@ -65,7 +65,7 @@ const AP_Param::GroupInfo AP_LQR_Control::var_info[] = {
 /*
   Wrap AHRS yaw if in reverse - radians
  */
-float AP_LQR_Control::get_yaw()
+float AP_LQR_Control::get_yaw_rad()
 {
     if (_reverse) {
         return wrap_PI(M_PI + _ahrs.yaw);
@@ -76,7 +76,7 @@ float AP_LQR_Control::get_yaw()
 /*
   Wrap AHRS yaw sensor if in reverse - centi-degress
  */
-float AP_LQR_Control::get_yaw_sensor()
+float AP_LQR_Control::get_yaw_sensor_cd()
 {
     if (_reverse) {
         return wrap_180_cd(18000 + _ahrs.yaw_sensor);
@@ -123,7 +123,7 @@ int32_t AP_LQR_Control::target_bearing_cd(void) const
 /*
   this is the turn distance assuming a 90 degree turn
  */
-float AP_LQR_Control::turn_distance(float wp_radius) const
+float AP_LQR_Control::turn_distance_m(float wp_radius) const
 {
     wp_radius *= sq(_ahrs.get_EAS2TAS());
     return wp_radius;
@@ -137,9 +137,9 @@ float AP_LQR_Control::turn_distance(float wp_radius) const
   they have reached the waypoint early, which makes things like camera
   trigger and ball drop at exact positions under mission control much easier
  */
-float AP_LQR_Control::turn_distance(float wp_radius, float turn_angle) const
+float AP_LQR_Control::turn_distance_m(float wp_radius, float turn_angle) const
 {
-    float distance_90 = turn_distance(wp_radius);
+    float distance_90 = turn_distance_m(wp_radius);
     turn_angle = fabsf(turn_angle);
     if (turn_angle >= 90) {
         return distance_90;
@@ -147,7 +147,7 @@ float AP_LQR_Control::turn_distance(float wp_radius, float turn_angle) const
     return distance_90 * turn_angle / 90.0f;
 }
 
-float AP_LQR_Control::loiter_radius(const float radius) const
+float AP_LQR_Control::loiter_radius_m(const float radius) const
 {
     // prevent an insane loiter bank limit
     float sanitized_bank_limit = constrain_float(_loiter_bank_limit, 0.0f, 89.0f);
@@ -223,7 +223,7 @@ void AP_LQR_Control::update_waypoint(const struct Location &prev_WP, const struc
         // use a small ground speed vector in the right direction,
         // allowing us to use the compass heading at zero GPS velocity
         groundSpeed = 0.1f;
-        _groundspeed_vector = Vector2f(cosf(get_yaw()), sinf(get_yaw())) * groundSpeed;
+        _groundspeed_vector = Vector2f(cosf(get_yaw_rad()), sinf(get_yaw_rad())) * groundSpeed;
     }
 
     // Calculate the NE position of WP B relative to WP A
@@ -234,7 +234,7 @@ void AP_LQR_Control::update_waypoint(const struct Location &prev_WP, const struc
     if (AB.length() < 1.0e-6f) {
         AB = location_diff(_current_loc, next_WP);
         if (AB.length() < 1.0e-6f) {
-            AB = Vector2f(cosf(get_yaw()), sinf(get_yaw()));
+            AB = Vector2f(cosf(get_yaw_rad()), sinf(get_yaw_rad()));
         }
     }
     AB.normalize();
@@ -260,7 +260,7 @@ void AP_LQR_Control::update_waypoint(const struct Location &prev_WP, const struc
     float q1= sqrtf(float((_max_xtrack*0.01)/(fabs((_max_xtrack*0.01)-_crosstrack_error))));
     
     //Calculate the approach velocity towards path
-    float si = RadiansToCentiDegrees(get_yaw())*0.01;
+    float si = RadiansToCentiDegrees(get_yaw_rad())*0.01;
     float si_p = (get_bearing_cd(prev_WP,next_WP))*0.01;
     float temp_sin=sinf(radians(si - si_p));
     float v_d= groundSpeed * temp_sin;
@@ -295,7 +295,7 @@ void AP_LQR_Control::update_loiter(const struct Location &center_WP, float radiu
 
     // scale loiter radius with square of EAS2TAS to allow us to stay
     // stable at high altitude
-    radius = loiter_radius(radius);
+    radius = loiter_radius_m(radius);
     float groundSpeed=_groundspeed_vector.length();
     Vector2f location_difference=location_diff(center_WP, _current_loc);
     
@@ -322,7 +322,7 @@ void AP_LQR_Control::update_loiter(const struct Location &center_WP, float radiu
         //Compute adaptive gains
         float q1= sqrtf((float)((_max_xtrack*0.01)/(fabs((_max_xtrack*0.01)-_crosstrack_error))));
         //Compute velocity of approach towards desired path
-        float si = RadiansToCentiDegrees(get_yaw())*0.01;
+        float si = RadiansToCentiDegrees(get_yaw_rad())*0.01;
         float temp_sin=sinf(radians(si - si_p));
         float v_d= groundSpeed * temp_sin;
         //Compute desired lateral acceleration
@@ -334,7 +334,7 @@ void AP_LQR_Control::update_loiter(const struct Location &center_WP, float radiu
     {
         float si_p = (_target_bearing_cd*0.01);
         float q1= sqrtf((float)((_max_xtrack*0.01)/(fabs((_max_xtrack*0.01)-_crosstrack_error))));
-        float si = RadiansToCentiDegrees(get_yaw())*0.01;
+        float si = RadiansToCentiDegrees(get_yaw_rad())*0.01;
         float temp_sin=sinf(radians(si - si_p));
         float v_d= groundSpeed * temp_sin;
         u = - (((_xtrack_fac*0.01)*q1*0*_crosstrack_error)+(sqrtf((float)((_q2_val*0.01)+(2*q1)))*(_vel_fac*0.01)*v_d));
@@ -368,10 +368,10 @@ void AP_LQR_Control::update_heading_hold(int32_t navigation_heading_cd)
         // use a small ground speed vector in the right direction,
         // allowing us to use the compass heading at zero GPS velocity
         groundSpeed = 0.1f;
-        _groundspeed_vector = Vector2f(cosf(get_yaw()), sinf(get_yaw())) * groundSpeed;
+        _groundspeed_vector = Vector2f(cosf(get_yaw_rad()), sinf(get_yaw_rad())) * groundSpeed;
     }
 
-    float si = RadiansToCentiDegrees(get_yaw())*0.01;
+    float si = RadiansToCentiDegrees(get_yaw_rad())*0.01;
     float si_p = (_target_bearing_cd)*0.01;
     float temp_sin = sinf(radians(si - si_p));
     float v_d = groundSpeed * temp_sin;
