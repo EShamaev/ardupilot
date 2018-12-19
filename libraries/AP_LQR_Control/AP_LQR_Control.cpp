@@ -1,5 +1,5 @@
 // Bank angle command based on adaptive optimal control.
-// Akshath Singhal
+// Akshath Singhal 2018
 
 #include <AP_HAL/AP_HAL.h>
 #include "AP_LQR_Control.h"
@@ -58,15 +58,6 @@ const AP_Param::GroupInfo AP_LQR_Control::var_info[] = {
     // @Increment: 25
     // @User: Advanced
     AP_GROUPINFO("LATACC",   6, AP_LQR_Control, _max_latacc, 10000),
-
-    // @Param: LQR_TARGET_SPEED
-    // @DisplayName: Set speed of the target to be tracked.
-    // @Description: The autopilot assumes an imaginary target of speed moving towards north.
-    // @Range: 0 25
-    // @Units: m/s
-    // @Increment: 1
-    // @User: Advanced
-    AP_GROUPINFO("LQR_T_SPD", 7, AP_LQR_Control, _tar_speed, 0),
 
     AP_GROUPEND
 };
@@ -254,29 +245,37 @@ void AP_LQR_Control::update_waypoint(const struct Location &prev_WP, const struc
     // calculate distance to target track, for reporting
     _crosstrack_error = A_air % AB;
 
-
     _crosstrack_error=- _crosstrack_error;
+    
+    //set minimum turn radius equal to twice the ground speed
     float min_turn_rad = 2*groundSpeed;
-    if(_max_latacc == 0)
+    
+    //limit maximum lateral acceleration and set default if zero
+    if((_max_latacc > (100*groundSpeed*groundSpeed/min_turn_rad)) || (_max_latacc ==0))
     { 
         _max_latacc = 100*groundSpeed*groundSpeed/min_turn_rad;
     }
-    float q1= sqrtf(float((_max_xtrack/100)/(fabs((_max_xtrack/100)-_crosstrack_error))));
-    float si = RadiansToCentiDegrees(get_yaw())/100;
-    float si_p = (get_bearing_cd(prev_WP,next_WP))/100;
+    
+    //Caluclate adaptive gains
+    float q1= sqrtf(float((_max_xtrack*0.01)/(fabs((_max_xtrack*0.01)-_crosstrack_error))));
+    
+    //Calculate the approach velocity towards path
+    float si = RadiansToCentiDegrees(get_yaw())*0.01;
+    float si_p = (get_bearing_cd(prev_WP,next_WP))*0.01;
     float temp_sin=sinf(radians(si - si_p));
     float v_d= groundSpeed * temp_sin;
-    float u =  - (((_xtrack_fac/100)*q1*_crosstrack_error)+(sqrtf((float)((_q2_val/100)+(2*q1)))*(_vel_fac/100)*v_d));
     
-
-    if (fabs(u)>(_max_latacc/100))
+    //Compute lateral acceleration based on current state and adaptive gains
+    float u =  - (((_xtrack_fac*0.01)*q1*_crosstrack_error)+(sqrtf((float)((_q2_val*0.01)+(2*q1)))*(_vel_fac*0.01)*v_d));
+    
+    //Limit calculated lateral acceleration to maximum values
+    if (fabs(u) > (_max_latacc*0.01))
     {
-        if(u>0)
-            u=(_max_latacc/100);
-        if(u<0)
-            u= - (_max_latacc/100);
+        if(u > 0)
+            u = _max_latacc*0.01;
+        if(u < 0)
+            u = - (_max_latacc*0.01);
     }
-    hal.console->printf("LQR");
     _latAccDem= u;
 
     
@@ -298,65 +297,58 @@ void AP_LQR_Control::update_loiter(const struct Location &center_WP, float radiu
     // stable at high altitude
     radius = loiter_radius(radius);
     float groundSpeed=_groundspeed_vector.length();
-    float si_p_dot=0;
     Vector2f location_difference=location_diff(center_WP, _current_loc);
+    
+    //Calculate rate change of heading of path
+    float si_p_dot=groundSpeed/location_difference.length();
     _crosstrack_error = location_difference.length() - radius;
-        
-    if (_tar_speed==0)
-    {
-        si_p_dot=groundSpeed/location_difference.length();
-    }
-    else
-    {
-        float x1=location_difference.x;
-        float y1=location_difference.y;
-        float dx1=_groundspeed_vector.x;
-        float dy1=_groundspeed_vector.y;
-        si_p_dot=(((x1*dy1)-y1*(dx1 -_tar_speed))/(location_difference.length()*location_difference.length()));
-    }
-
+    
+    //Set minimum turn radius equal to twice the groundspeed
     float min_turn_rad = 2*groundSpeed;
-    if(_max_latacc == 0)
-    {
+    
+    //limit maximum lateral acceleration and set default if zero
+    if((_max_latacc > (100*groundSpeed*groundSpeed/min_turn_rad)) || (_max_latacc ==0))
+    { 
         _max_latacc = 100*groundSpeed*groundSpeed/min_turn_rad;
     }
-
+    
+    float u =0;
+    
+    // check if vehicle is not very far from the desired circular path
     if (_crosstrack_error < (radius))
     {
-        float si_p = ((_target_bearing_cd + 9000)/100);
-        float q1= sqrtf((float)((_max_xtrack/100)/(fabs((_max_xtrack/100)-_crosstrack_error))));
-        float si = RadiansToCentiDegrees(get_yaw())/100;
+        //Compute desired heading perpendicular
+        float si_p = ((_target_bearing_cd + 9000)*0.01);
+        //Compute adaptive gains
+        float q1= sqrtf((float)((_max_xtrack*0.01)/(fabs((_max_xtrack*0.01)-_crosstrack_error))));
+        //Compute velocity of approach towards desired path
+        float si = RadiansToCentiDegrees(get_yaw())*0.01;
         float temp_sin=sinf(radians(si - si_p));
         float v_d= groundSpeed * temp_sin;
-        float u =   (((_xtrack_fac/100)*q1*0.5*_crosstrack_error)+(sqrtf((float)((_q2_val/100)+(2*q1)))*(_vel_fac/100)*v_d)+groundSpeed*si_p_dot);
-        if (fabs(u)>(_max_latacc/100))
-        {
-            if(u>0)
-                u=(_max_latacc/100);
-            if(u<0)
-                u= - (_max_latacc/100);
-        }
-        _latAccDem= - u;
+        //Compute desired lateral acceleration
+        u = - (((_xtrack_fac*0.01)*q1*0.5*_crosstrack_error)+(sqrtf((float)((_q2_val*0.01)+(2*q1)))*(_vel_fac*0.01)*v_d)+groundSpeed*si_p_dot);
     }
+    
+    //lead towards center if vehicle is very far from circular path until crosstrack error < radius
     else
     {
-
-        float si_p = (_target_bearing_cd/100);
-        float q1= sqrtf((float)((_max_xtrack/100)/(fabs((_max_xtrack/100)-_crosstrack_error))));
-        float si = RadiansToCentiDegrees(get_yaw())/100;
+        float si_p = (_target_bearing_cd*0.01);
+        float q1= sqrtf((float)((_max_xtrack*0.01)/(fabs((_max_xtrack*0.01)-_crosstrack_error))));
+        float si = RadiansToCentiDegrees(get_yaw())*0.01;
         float temp_sin=sinf(radians(si - si_p));
         float v_d= groundSpeed * temp_sin;
-        float u =   (((_xtrack_fac/100)*q1*0*_crosstrack_error)+(sqrtf((float)((_q2_val/100)+(2*q1)))*(_vel_fac/100)*v_d));
-        if (fabs(u)>(_max_latacc/100))
-        {
-            if(u>0)
-                u=(_max_latacc/100);
-            if(u<0)
-                u= - (_max_latacc/100);
-        }
-        _latAccDem= - u;
+        u = - (((_xtrack_fac*0.01)*q1*0*_crosstrack_error)+(sqrtf((float)((_q2_val*0.01)+(2*q1)))*(_vel_fac*0.01)*v_d));
     }
 
+    //Limit the lateral acceleration
+    if (fabs(u) > (_max_latacc*0.01))
+    {
+        if(u > 0)
+            u = (_max_latacc*0.01);
+        if(u < 0)
+            u = - (_max_latacc*0.01);
+    }
+    _latAccDem = u;
     _data_is_stale = false; // status are correctly updated with current waypoint data
 }
 
@@ -379,21 +371,21 @@ void AP_LQR_Control::update_heading_hold(int32_t navigation_heading_cd)
         _groundspeed_vector = Vector2f(cosf(get_yaw()), sinf(get_yaw())) * groundSpeed;
     }
 
-    float si = RadiansToCentiDegrees(get_yaw())/100;
-    float si_p = (_target_bearing_cd)/100;
-    float temp_sin=sinf(radians(si - si_p));
-    float v_d= groundSpeed * temp_sin;
-    float u =  - ((_vel_fac/100)*v_d);
+    float si = RadiansToCentiDegrees(get_yaw())*0.01;
+    float si_p = (_target_bearing_cd)*0.01;
+    float temp_sin = sinf(radians(si - si_p));
+    float v_d = groundSpeed * temp_sin;
+    float u =  - ((_vel_fac*0.01)*v_d);
     
 
-    if (fabs(u)>(_max_latacc/100))
+    if (fabs(u) > (_max_latacc*0.01))
     {
-        if(u>0)
-            u=(_max_latacc/100);
-        if(u<0)
-            u= - (_max_latacc/100);
+        if(u > 0)
+            u = (_max_latacc*0.01);
+        if(u < 0)
+            u = - (_max_latacc*0.01);
     }
-    _latAccDem= u;
+    _latAccDem = u;
 
 
     _data_is_stale = false; // status are correctly updated with current waypoint data
