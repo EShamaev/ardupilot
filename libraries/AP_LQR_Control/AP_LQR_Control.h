@@ -44,7 +44,7 @@ public:
     int32_t target_bearing_cd(void) const;
     float turn_distance(float wp_radius) const;
     float turn_distance(float wp_radius, float turn_angle) const;
-    float loiter_radius (const float loiter_radius) const;
+    float loiter_radius(const float loiter_radius) const;
     void update_waypoint(const struct Location &prev_WP, const struct Location &next_WP, float dist_min = 0.0f);
     void update_loiter(const struct Location &center_WP, float radius, int8_t loiter_direction);
     void update_heading_hold(int32_t navigation_heading_cd);
@@ -116,6 +116,6 @@ private:
     AP_Float _loiter_bank_limit;
 
     bool _reverse = false;
-    float get_yaw();
-    float get_yaw_sensor();
+    float get_yaw_rad();
+    float get_yaw_sensor_cd();
 };
