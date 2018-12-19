@@ -123,7 +123,7 @@ int32_t AP_LQR_Control::target_bearing_cd(void) const
 /*
   this is the turn distance assuming a 90 degree turn
  */
-float AP_LQR_Control::turn_distance_m(float wp_radius) const
+float AP_LQR_Control::turn_distance(float wp_radius) const
 {
     wp_radius *= sq(_ahrs.get_EAS2TAS());
     return wp_radius;
@@ -137,9 +137,9 @@ float AP_LQR_Control::turn_distance_m(float wp_radius) const
   they have reached the waypoint early, which makes things like camera
   trigger and ball drop at exact positions under mission control much easier
  */
-float AP_LQR_Control::turn_distance_m(float wp_radius, float turn_angle) const
+float AP_LQR_Control::turn_distance(float wp_radius, float turn_angle) const
 {
-    float distance_90 = turn_distance_m(wp_radius);
+    float distance_90 = turn_distance(wp_radius);
     turn_angle = fabsf(turn_angle);
     if (turn_angle >= 90) {
         return distance_90;
@@ -147,7 +147,7 @@ float AP_LQR_Control::turn_distance_m(float wp_radius, float turn_angle) const
     return distance_90 * turn_angle / 90.0f;
 }
 
-float AP_LQR_Control::loiter_radius_m(const float radius) const
+float AP_LQR_Control::loiter_radius(const float radius) const
 {
     // prevent an insane loiter bank limit
     float sanitized_bank_limit = constrain_float(_loiter_bank_limit, 0.0f, 89.0f);
@@ -295,7 +295,7 @@ void AP_LQR_Control::update_loiter(const struct Location &center_WP, float radiu
 
     // scale loiter radius with square of EAS2TAS to allow us to stay
     // stable at high altitude
-    radius = loiter_radius_m(radius);
+    radius = loiter_radius(radius);
     float groundSpeed=_groundspeed_vector.length();
     Vector2f location_difference=location_diff(center_WP, _current_loc);
     
