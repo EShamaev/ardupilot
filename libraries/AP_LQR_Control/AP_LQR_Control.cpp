@@ -316,28 +316,29 @@ void AP_LQR_Control::update_loiter(const struct Location &center_WP, float radiu
     
     // update _target_bearing_cd
     _target_bearing_cd = get_bearing_cd(_current_loc, center_WP);
-    
+    //Compute adaptive gains
+    float q1= sqrtf((float)((_max_xtrack*0.01)/(fabs((_max_xtrack*0.01)-_crosstrack_error))));
+    //Compute velocity of approach towards desired path
+    float si = RadiansToCentiDegrees(get_yaw_rad())*0.01;
     // check if vehicle is not very far from the desired circular path
-    if (_crosstrack_error < (radius))
+    if (_crosstrack_error < (min_turning_radius))
     {
         //Compute desired heading perpendicular
         float si_p = ((_target_bearing_cd + (loiter_direction)*(9000))*0.01);
-        //Compute adaptive gains
-        float q1= sqrtf((float)((_max_xtrack*0.01)/(fabs((_max_xtrack*0.01)-_crosstrack_error))));
-        //Compute velocity of approach towards desired path
-        float si = RadiansToCentiDegrees(get_yaw_rad())*0.01;
         float temp_sin=sinf(radians(si - si_p));
         float v_d= groundSpeed * temp_sin;
         //Compute desired lateral acceleration
         u = - (((_xtrack_fac*0.01)*q1*0.5*_crosstrack_error)+(sqrtf((float)((_q2_val*0.01)+(2*q1)))*(_vel_fac*0.01)*v_d)+groundSpeed*si_p_dot);
     }
     
-    //lead towards center if vehicle is very far from circular path until crosstrack error < radius
+    //lead towards center if vehicle is very far from circular path until crosstrack error < minimum turning radius
     else
     {
         float si_p = (_target_bearing_cd*0.01);
-        float q1= sqrtf((float)((_max_xtrack*0.01)/(fabs((_max_xtrack*0.01)-_crosstrack_error))));
-        float si = RadiansToCentiDegrees(get_yaw_rad())*0.01;
+        if (_crosstrack_error < 0)
+        {
+            si_p = si_p+180;
+        }
         float temp_sin=sinf(radians(si - si_p));
         float v_d= groundSpeed * temp_sin;
         u = - (sqrtf((float)((_q2_val*0.01)+(2*q1)))*(_vel_fac*0.01)*v_d);
