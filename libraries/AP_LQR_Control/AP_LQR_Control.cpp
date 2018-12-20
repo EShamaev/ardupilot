@@ -321,7 +321,7 @@ void AP_LQR_Control::update_loiter(const struct Location &center_WP, float radiu
     //Compute velocity of approach towards desired path
     float si = RadiansToCentiDegrees(get_yaw_rad())*0.01;
     // check if vehicle is not very far from the desired circular path
-    if (_crosstrack_error < (min_turn_radius))
+    if (_crosstrack_error < (min_turn_rad))
     {
         //Compute desired heading perpendicular
         float si_p = ((_target_bearing_cd + (loiter_direction)*(9000))*0.01);
