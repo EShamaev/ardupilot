@@ -27,8 +27,8 @@ const AP_Param::GroupInfo AP_LQR_Control::var_info[] = {
     AP_GROUPINFO("MAX_XTRCK",   2, AP_LQR_Control, _max_xtrack, 2000),
 
     // @Param: Q2_VAL
-    // @DisplayName: LQR VALUE of Q2
-    // @Description: The value of Q2 to be used. Divided by 100 before use.
+    // @DisplayName: VALUE of Q2 squared
+    // @Description: The value of Q2 squared to be used. Divided by 100 before use.
     // @Range: 1 10000
     // @Increment: 10
     // @User: Advanced
@@ -52,7 +52,7 @@ const AP_Param::GroupInfo AP_LQR_Control::var_info[] = {
 
     // @Param: MAX_LATACC
     // @DisplayName: LQR maximum allowed lateral acceleration
-    // @Description: Maximum allowed lateral acceleration(in centimeters/sec sqaure) for LQR. A very small value can lead to slow turning and higher overshoots. A very large value leads to very small turning radius causing unstable roll and yaw throws.
+    // @Description: Maximum allowed lateral acceleration for LQR. A very small value can lead to slow turning and higher overshoots. A very large value leads to very small turning radius causing unstable roll and yaw throws.
     // @Range: 0 10000
     // @Units: cm/s/s
     // @Increment: 25
@@ -243,7 +243,7 @@ void AP_LQR_Control::update_waypoint(const struct Location &prev_WP, const struc
     Vector2f A_air = location_diff(prev_WP, _current_loc);
 
     // calculate distance to target track, for reporting
-    _crosstrack_error = A_air % AB;
+    _crosstrack_error = (A_air % AB)/(AB.length());
 
     _crosstrack_error=- _crosstrack_error;
     
@@ -318,7 +318,7 @@ void AP_LQR_Control::update_loiter(const struct Location &center_WP, float radiu
     if (_crosstrack_error < (radius))
     {
         //Compute desired heading perpendicular
-        float si_p = ((_target_bearing_cd + 9000)*0.01);
+        float si_p = ((_target_bearing_cd + (loiter_direction)*(9000))*0.01);
         //Compute adaptive gains
         float q1= sqrtf((float)((_max_xtrack*0.01)/(fabs((_max_xtrack*0.01)-_crosstrack_error))));
         //Compute velocity of approach towards desired path
@@ -337,7 +337,7 @@ void AP_LQR_Control::update_loiter(const struct Location &center_WP, float radiu
         float si = RadiansToCentiDegrees(get_yaw_rad())*0.01;
         float temp_sin=sinf(radians(si - si_p));
         float v_d= groundSpeed * temp_sin;
-        u = - (((_xtrack_fac*0.01)*q1*0*_crosstrack_error)+(sqrtf((float)((_q2_val*0.01)+(2*q1)))*(_vel_fac*0.01)*v_d));
+        u = - (sqrtf((float)((_q2_val*0.01)+(2*q1)))*(_vel_fac*0.01)*v_d);
     }
 
     //Limit the lateral acceleration
