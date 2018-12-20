@@ -1220,7 +1220,7 @@ const AP_Param::GroupInfo ParametersG2::var_info[] = {
 
 ParametersG2::ParametersG2(void) :
     ice_control(plane.rpm_sensor, plane.ahrs),
-    LQR_controller(plane.ahrs, plane.TECS_controller)
+    LQR_controller(plane.ahrs, &plane.TECS_controller)
 #if SOARING_ENABLED == ENABLED
     ,soaring_controller(plane.ahrs, plane.TECS_controller, plane.aparm)
 #endif
