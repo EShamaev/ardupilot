@@ -1213,7 +1213,7 @@ const AP_Param::GroupInfo ParametersG2::var_info[] = {
     
     // @Group: NAVLQR_
     // @Path: ../libraries/AP_LQR_Control/AP_LQR_Control.cpp
-    AP_SUBGROUPINFO(lqr_control, "NAVLQR_", 19, ParametersG2, AP_LQR_Control),
+    AP_SUBGROUPINFO(LQR_controller, "NAVLQR_", 19, ParametersG2, AP_LQR_Control),
     
     AP_GROUPEND
 };
