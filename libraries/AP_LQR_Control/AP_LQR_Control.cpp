@@ -314,6 +314,9 @@ void AP_LQR_Control::update_loiter(const struct Location &center_WP, float radiu
     
     float u =0;
     
+    // update _target_bearing_cd
+    _target_bearing_cd = get_bearing_cd(_current_loc, center_WP);
+    
     // check if vehicle is not very far from the desired circular path
     if (_crosstrack_error < (radius))
     {
