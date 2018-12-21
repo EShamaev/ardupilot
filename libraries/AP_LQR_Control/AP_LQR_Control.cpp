@@ -24,7 +24,7 @@ const AP_Param::GroupInfo AP_LQR_Control::var_info[] = {
     // @Units: cm
     // @Increment: 20
     // @User: Advanced
-    AP_GROUPINFO("MAX_XTRCK",   2, AP_LQR_Control, _max_xtrack, 2000),
+    AP_GROUPINFO("MAX_XTRCK",   2, AP_LQR_Control, _max_xtrack, 400),
 
     // @Param: Q2_VAL
     // @DisplayName: VALUE of Q2 squared
@@ -32,7 +32,7 @@ const AP_Param::GroupInfo AP_LQR_Control::var_info[] = {
     // @Range: 1 10000
     // @Increment: 10
     // @User: Advanced
-    AP_GROUPINFO("Q2_VAL",   3, AP_LQR_Control, _q2_val, 100),
+    AP_GROUPINFO("Q2_VAL",   3, AP_LQR_Control, _q2_val, 200),
 
     // @Param: XTRACK_FACTOR
     // @DisplayName: LQR XTRACK Error weightage in acceleration.
