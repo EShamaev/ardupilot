@@ -291,6 +291,12 @@ void AP_LQR_Control::update_waypoint(const struct Location &prev_WP, const struc
 void AP_LQR_Control::update_loiter(const struct Location &center_WP, float radius, int8_t loiter_direction)
 {
     struct Location _current_loc;
+    // Get current position and velocity
+    if (_ahrs.get_position(_current_loc) == false) {
+        // if no GPS loc available, maintain last nav/target_bearing
+        _data_is_stale = true;
+        return;
+    }
     Vector2f _groundspeed_vector = _ahrs.groundspeed_vector();
 
     // scale loiter radius with square of EAS2TAS to allow us to stay
@@ -315,27 +321,27 @@ void AP_LQR_Control::update_loiter(const struct Location &center_WP, float radiu
     float u =0;
     
     // update _target_bearing_cd
-    _target_bearing_cd = get_bearing_cd(_current_loc, center_WP);
+    _target_bearing_cd = get_bearing_cd(center_WP,_current_loc);
     //Compute adaptive gains
     float q1= sqrtf((float)((_max_xtrack*0.01)/(fabsf((_max_xtrack*0.01)-_crosstrack_error))));
     //Compute velocity of approach towards desired path
     float si = RadiansToCentiDegrees(get_yaw_rad())*0.01;
     // check if vehicle is not very far from the desired circular path
-    if (_crosstrack_error < (min_turn_rad))
+    if (fabsf(_crosstrack_error) < (min_turn_rad))
     {
         //Compute desired heading perpendicular
         float si_p = ((_target_bearing_cd + (loiter_direction)*(9000))*0.01);
         float temp_sin=sinf(radians(si - si_p));
         float v_d= groundSpeed * temp_sin;
         //Compute desired lateral acceleration
-        u = - (((_xtrack_fac*0.01)*q1*0.5*_crosstrack_error)+(sqrtf((float)((_q2_val*0.01)+(2*q1)))*(_vel_fac*0.01)*v_d)+groundSpeed*si_p_dot);
+        u = (((_xtrack_fac*0.01)*q1*0.5*_crosstrack_error)-(sqrtf((float)((_q2_val*0.01)+(2*q1)))*(_vel_fac*0.01)*v_d)+groundSpeed*si_p_dot);
     }
     
     //lead towards center if vehicle is very far from circular path until crosstrack error < minimum turning radius
     else
     {
         float si_p = (_target_bearing_cd*0.01);
-        if (_crosstrack_error < 0)
+        if (_crosstrack_error > 0)
         {
             si_p = si_p+180;
         }
