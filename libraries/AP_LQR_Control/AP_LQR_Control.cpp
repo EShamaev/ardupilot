@@ -67,6 +67,8 @@ const AP_Param::GroupInfo AP_LQR_Control::var_info[] = {
  */
 float AP_LQR_Control::get_yaw_rad()
 {
+    const AP_AHRS &_ahrs = AP::ahrs();
+
     if (_reverse) {
         return wrap_PI(M_PI + _ahrs.yaw);
     }
@@ -78,6 +80,8 @@ float AP_LQR_Control::get_yaw_rad()
  */
 float AP_LQR_Control::get_yaw_sensor_cd()
 {
+    const AP_AHRS &_ahrs = AP::ahrs();
+
     if (_reverse) {
         return wrap_180_cd(18000 + _ahrs.yaw_sensor);
     }
@@ -90,6 +94,8 @@ float AP_LQR_Control::get_yaw_sensor_cd()
  */
 int32_t AP_LQR_Control::nav_roll_cd(void) const
 {
+    const AP_AHRS &_ahrs = AP::ahrs();
+
     float ret;
     ret = cosf(_ahrs.pitch)*degrees(atanf(_latAccDem * 0.101972f) * 100.0f); // 0.101972 = 1/9.81
     ret = constrain_float(ret, -9000, 9000);
@@ -125,6 +131,8 @@ int32_t AP_LQR_Control::target_bearing_cd(void) const
  */
 float AP_LQR_Control::turn_distance(float wp_radius) const
 {
+    const AP_AHRS &_ahrs = AP::ahrs();
+
     wp_radius *= sq(_ahrs.get_EAS2TAS());
     return wp_radius;
 }
@@ -149,6 +157,8 @@ float AP_LQR_Control::turn_distance(float wp_radius, float turn_angle) const
 
 float AP_LQR_Control::loiter_radius(const float radius) const
 {
+    const AP_AHRS &_ahrs = AP::ahrs();
+
     // prevent an insane loiter bank limit
     float sanitized_bank_limit = constrain_float(_loiter_bank_limit, 0.0f, 89.0f);
     float lateral_accel_sea_level = tanf(radians(sanitized_bank_limit)) * GRAVITY_MSS;
@@ -195,7 +205,7 @@ bool AP_LQR_Control::reached_loiter_target(void)
 // update L1 control for waypoint navigation
 void AP_LQR_Control::update_waypoint(const struct Location &prev_WP, const struct Location &next_WP, float dist_min)
 {
-
+    const AP_AHRS &_ahrs = AP::ahrs();
     struct Location _current_loc;
     
     uint32_t now = AP_HAL::micros();
@@ -290,6 +300,8 @@ void AP_LQR_Control::update_waypoint(const struct Location &prev_WP, const struc
 // update L1 control for loitering
 void AP_LQR_Control::update_loiter(const struct Location &center_WP, float radius, int8_t loiter_direction)
 {
+    const AP_AHRS &_ahrs = AP::ahrs();
+
     struct Location _current_loc;
     // Get current position and velocity
     if (_ahrs.get_position(_current_loc) == false) {
@@ -366,6 +378,7 @@ void AP_LQR_Control::update_loiter(const struct Location &center_WP, float radiu
 // update LQR control for heading hold navigation
 void AP_LQR_Control::update_heading_hold(int32_t navigation_heading_cd)
 {
+    const AP_AHRS &_ahrs = AP::ahrs();
 
     // copy to _target_bearing_cd and _nav_bearing
     _target_bearing_cd = wrap_180_cd(navigation_heading_cd);
@@ -404,6 +417,8 @@ void AP_LQR_Control::update_heading_hold(int32_t navigation_heading_cd)
 // update LQR control for level flight on current heading
 void AP_LQR_Control::update_level_flight(void)
 {
+    const AP_AHRS &_ahrs = AP::ahrs();
+
     // copy to _target_bearing_cd and _nav_bearing
     _target_bearing_cd = _ahrs.yaw_sensor;
     _nav_bearing = _ahrs.yaw;

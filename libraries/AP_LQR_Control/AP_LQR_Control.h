@@ -17,9 +17,8 @@
 
 class AP_LQR_Control : public AP_Navigation {
 public:
-    AP_LQR_Control(AP_AHRS &ahrs, const AP_SpdHgtControl *spdHgtControl)
-        : _ahrs(ahrs)
-        , _spdHgtControl(spdHgtControl)
+    AP_LQR_Control(const AP_SpdHgtControl *spdHgtControl)
+        : _spdHgtControl(spdHgtControl)
     {
         AP_Param::setup_object_defaults(this, var_info);
     }
@@ -66,9 +65,6 @@ public:
     }
 
 private:
-    // reference to the AHRS object
-    AP_AHRS &_ahrs;
-
     // pointer to the SpdHgtControl object
     const AP_SpdHgtControl *_spdHgtControl;
 
